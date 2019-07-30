@@ -1,0 +1,3 @@
+linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed
+initrd (cd0)/boot/initrd.img
+boot
