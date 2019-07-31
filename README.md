@@ -11,7 +11,7 @@ eval $(docker-machine env)
 docker run --rm hello-world
 ```
 
-#TODO
+### TODO
 
 * Remove hard coded stuff
     * Paths
