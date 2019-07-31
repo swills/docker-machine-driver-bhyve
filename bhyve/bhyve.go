@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	defaultTimeout  = 15 * time.Second
 	defaultDiskSize = 16384
 )
 
@@ -97,28 +96,36 @@ func (d *Driver) writeDeviceMap() error {
 		return err
 	}
 
-	f.WriteString("(hd0) " + md + "guest.img\n")
+	_, err = f.WriteString("(hd0) " + md + "guest.img\n")
 	if err != nil {
 		return err
 	}
-	f.WriteString("(cd0) /usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso\n")
+	_, err = f.WriteString("(cd0) /usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso\n")
 	if err != nil {
 		return err
 	}
 
-	f.Sync()
-	f.Close()
+	err = f.Sync()
+	if err != nil {
+		return err
+	}
+	err = f.Close()
+	if err != nil {
+		return err
+	}
 
 	return nil
 
 }
 
 func (d *Driver) runGrub() error {
-
 	out := []byte{}
 
 	for maxtries := 0; maxtries < 16; maxtries++ {
-		d.writeDeviceMap()
+		err := d.writeDeviceMap()
+		if err != nil {
+			return err
+		}
 		md := d.getMachineDir()
 		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
 		stdin, err := cmd.StdinPipe()
@@ -128,9 +135,18 @@ func (d *Driver) runGrub() error {
 
 		go func() {
 			defer stdin.Close()
-			io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
-			io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
-			io.WriteString(stdin, "boot\n")
+			_, err = io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
+			if err != nil {
+				return
+			}
+			_, err = io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
+			if err != nil {
+				return
+			}
+			_, err = io.WriteString(stdin, "boot\n")
+			if err != nil {
+				return
+			}
 		}()
 
 		out, err = cmd.CombinedOutput()
@@ -302,11 +318,11 @@ func (d *Driver) GetURL() (string, error) {
 
 func (d *Driver) Kill() error {
 	log.Debugf("Kill called")
-	return errors.New("Kill not implemented yet")
+	return errors.New("not implemented yet")
 }
 
 func (d *Driver) PreCreateCheck() error {
-	log.Debugf("PreCreateCheck called")
+	log.Debugf("preCreateCheck called")
 	/*
 		return errors.New("PreCreateCheck not implemented yet")
 	*/
@@ -315,12 +331,12 @@ func (d *Driver) PreCreateCheck() error {
 
 func (d *Driver) Remove() error {
 	log.Debugf("Remove called")
-	return errors.New("Remove not implemented yet")
+	return errors.New("not implemented yet")
 }
 
 func (d *Driver) Restart() error {
 	log.Debugf("Restart called")
-	return errors.New("Restart not implemented yet")
+	return errors.New("not implemented yet")
 }
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
@@ -336,12 +352,12 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 func (d *Driver) Start() error {
 	log.Debugf("Start called")
-	return errors.New("Start not implemented yet")
+	return errors.New("not implemented yet")
 }
 
 func (d *Driver) Stop() error {
 	log.Debugf("Stop called")
-	return errors.New("Stop not implemented yet")
+	return errors.New("not implemented yet")
 }
 
 func NewDriver(hostName, storePath string) *Driver {
