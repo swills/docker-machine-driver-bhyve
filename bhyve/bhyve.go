@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 )
 
 const (
+	defaultTimeout  = 15 * time.Second
 	defaultDiskSize = 16384
 )
 
@@ -297,14 +299,12 @@ func (d *Driver) GetSSHHostname() (string, error) {
 
 func (d *Driver) GetState() (state.State, error) {
 	log.Debugf("GetState called")
-	/*
-		address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
+	address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
 
-		_, err := net.DialTimeout("tcp", address, defaultTimeout)
-		if err != nil {
-			return state.Stopped, nil
-		}
-	*/
+	_, err := net.DialTimeout("tcp", address, defaultTimeout)
+	if err != nil {
+		return state.Stopped, nil
+	}
 
 	return state.Running, nil
 }
@@ -325,9 +325,6 @@ func (d *Driver) Kill() error {
 
 func (d *Driver) PreCreateCheck() error {
 	log.Debugf("preCreateCheck called")
-	/*
-		return errors.New("PreCreateCheck not implemented yet")
-	*/
 	return nil
 }
 
