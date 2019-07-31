@@ -134,7 +134,6 @@ func (d *Driver) runGrub() error {
 		}
 
 		go func() {
-			defer stdin.Close()
 			_, err = io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
 			if err != nil {
 				return
@@ -144,6 +143,10 @@ func (d *Driver) runGrub() error {
 				return
 			}
 			_, err = io.WriteString(stdin, "boot\n")
+			if err != nil {
+				return
+			}
+			err = stdin.Close()
 			if err != nil {
 				return
 			}
@@ -280,7 +283,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			EnvVar: "BHYVE_SSH_PORT",
 		},
 	}
-	return nil
 }
 
 func (d *Driver) GetIP() (string, error) {
