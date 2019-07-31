@@ -76,8 +76,8 @@ func findcdpath() (string, error) {
 	return "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso", nil
 }
 
-func (d *Driver) getMachineDir() (string, error) {
-	return d.StorePath + "/machines/" + d.MachineName + "/", nil
+func (d *Driver) getMachineDir() string {
+	return d.StorePath + "/machines/" + d.MachineName + "/"
 }
 
 func fileExists(filename string) bool {
@@ -88,12 +88,39 @@ func fileExists(filename string) bool {
 	return !info.IsDir()
 }
 
+func (d *Driver) writeDeviceMap() error {
+	md := d.getMachineDir()
+	devmap := md + "device.map"
+
+	f, err := os.Create(devmap)
+	if err != nil {
+		return err
+	}
+
+	f.WriteString("(hd0) " + md + "guest.img\n")
+	if err != nil {
+		return err
+	}
+	f.WriteString("(cd0) /usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso\n")
+	if err != nil {
+		return err
+	}
+
+	f.Sync()
+	f.Close()
+
+	return nil
+
+}
+
 func (d *Driver) runGrub() error {
 
 	out := []byte{}
 
 	for maxtries := 0; maxtries < 16; maxtries++ {
-		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
+		d.writeDeviceMap()
+		md := d.getMachineDir()
+		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return err
