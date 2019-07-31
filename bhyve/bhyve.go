@@ -80,21 +80,61 @@ func (d *Driver) getMachineDir() (string, error) {
 	return d.StorePath + "/machines/" + d.MachineName + "/", nil
 }
 
+func fileExists(filename string) bool {
+    info, err := os.Stat(filename)
+    if os.IsNotExist(err) {
+        return false
+    }
+    return !info.IsDir()
+}
+
+func (d *Driver) runGrub() error {
+
+	out := []byte{}
+
+	for maxtries := 0; maxtries < 16 ; maxtries++ {
+		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return err
+		}
+
+		go func() {
+			defer stdin.Close()
+			io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
+			io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
+			io.WriteString(stdin, "boot\n")
+		} ()
+
+		out, err = cmd.CombinedOutput()
+		log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
+		if strings.Contains(string(out), "GNU GRUB") {
+			log.Debugf("grub-bhyve: looks OK")
+			return nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
+}
+
+
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
-	log.Debugf("Removing VM %s", d.MachineName)
-	err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm=" + d.MachineName)
-	// XXX error checking
-        if err != nil {
-        }
+	for fileExists("/dev/vmm/" + d.MachineName) {
+		log.Debugf("Removing VM %s", d.MachineName)
+		err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm=" + d.MachineName)
+		if err != nil {
+		}
+	}
 	vmpath := d.StorePath + "/machines/" + d.MachineName + "/" + "guest.img"
 	bhyvelogpath := d.StorePath + "/machines/" + d.MachineName + "/" + "bhyve.log"
 	log.Debugf("vmpath: %s", vmpath)
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
 	log.Debugf("Deleting %s", vmpath)
-	err = os.RemoveAll(vmpath)
+	err := os.RemoveAll(vmpath)
 	if err != nil {
 		return err
 	}
@@ -109,21 +149,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	cmd := exec.Command("sudo", "grub-bhyve", "-m", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		defer stdin.Close()
-		io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
-		io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
-		io.WriteString(stdin, "boot\n")
-	} ()
-
-	out, err := cmd.CombinedOutput()
-	log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
+	err = d.runGrub()
 	if err != nil {
 		return err
 	}
@@ -135,32 +161,24 @@ func (d *Driver) Create() error {
 	cpucount := "2"
 	ram := "1024"
 
-	log.Debugf("XXX: 1")
 	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-	cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-	log.Debugf("XXX: 2")
+	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
 	stderr, err := cmd.StderrPipe()
-	log.Debugf("XXX: 3")
 	if err != nil {
 		return err
 	}
 
-	log.Debugf("XXX: 4")
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
-	log.Debugf("XXX: 5")
 	slurp, _ := ioutil.ReadAll(stderr)
-	log.Debugf("XXX: 6")
 	log.Debugf("%s\n", slurp)
 
-	log.Debugf("XXX: 7")
 	if err := cmd.Wait(); err != nil {
 		return err
 	}
-	log.Debugf("XXX: 8")
-	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(out)))
+	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
 
 /*
 	err = easyCmd("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
