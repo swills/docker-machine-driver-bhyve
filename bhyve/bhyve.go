@@ -1,19 +1,19 @@
 package bhyve
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"time"
-	"os/exec"
-	"os"
 	"io"
 	"io/ioutil"
-	"bytes"
-	"strings"
+	"os"
+	"os/exec"
 	"strconv"
-/*
-	"net"
-*/
+	"strings"
+	"time"
+	/*
+		"net"
+	*/
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/engine"
@@ -23,14 +23,14 @@ import (
 )
 
 const (
-	defaultTimeout = 15 * time.Second
-        defaultDiskSize       = 16384
+	defaultTimeout  = 15 * time.Second
+	defaultDiskSize = 16384
 )
 
 type Driver struct {
 	*drivers.BaseDriver
-	EnginePort    int
-        DiskSize      int64
+	EnginePort int
+	DiskSize   int64
 }
 
 // https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
@@ -48,16 +48,16 @@ func stripCtlAndExtFromBytes(str string) string {
 }
 
 func easyCmd(args ...string) error {
-        log.Debugf("EXEC: " + strings.Join(args," "))
-        cmd:= exec.Command(args[0], args[1:]...)
-        var stdout bytes.Buffer
-        var stderr bytes.Buffer
-        cmd.Stdout = &stdout
-        cmd.Stderr = &stderr
-        err := cmd.Run()
-        log.Debugf("STDOUT: %s", stdout.String())
-        log.Debugf("STDERR: %s", stderr.String())
-        return err
+	log.Debugf("EXEC: " + strings.Join(args, " "))
+	cmd := exec.Command(args[0], args[1:]...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	log.Debugf("STDOUT: %s", stdout.String())
+	log.Debugf("STDERR: %s", stderr.String())
+	return err
 }
 
 func findnmdmdev() (string, error) {
@@ -81,18 +81,18 @@ func (d *Driver) getMachineDir() (string, error) {
 }
 
 func fileExists(filename string) bool {
-    info, err := os.Stat(filename)
-    if os.IsNotExist(err) {
-        return false
-    }
-    return !info.IsDir()
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }
 
 func (d *Driver) runGrub() error {
 
 	out := []byte{}
 
-	for maxtries := 0; maxtries < 16 ; maxtries++ {
+	for maxtries := 0; maxtries < 16; maxtries++ {
 		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
@@ -104,7 +104,7 @@ func (d *Driver) runGrub() error {
 			io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
 			io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
 			io.WriteString(stdin, "boot\n")
-		} ()
+		}()
 
 		out, err = cmd.CombinedOutput()
 		log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
@@ -118,13 +118,12 @@ func (d *Driver) runGrub() error {
 	return nil
 }
 
-
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
 	for fileExists("/dev/vmm/" + d.MachineName) {
 		log.Debugf("Removing VM %s", d.MachineName)
-		err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm=" + d.MachineName)
+		err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+d.MachineName)
 		if err != nil {
 		}
 	}
@@ -144,7 +143,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar", "of=" + vmpath, "conv=notrunc", "status=none")
+	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar", "of="+vmpath, "conv=notrunc", "status=none")
 	if err != nil {
 		return err
 	}
@@ -162,7 +161,7 @@ func (d *Driver) Create() error {
 	ram := "1024"
 
 	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
+	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+vmpath, "-s", "4:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M", d.MachineName)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
@@ -180,14 +179,14 @@ func (d *Driver) Create() error {
 	}
 	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
 
-/*
-	err = easyCmd("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-	if err != nil {
-		return err
-	}
-*/
+	/*
+		err = easyCmd("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
+		if err != nil {
+			return err
+		}
+	*/
 
-	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa", d.StorePath + "/machines/" + d.MachineName + "/" + "id_rsa")
+	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa", d.StorePath+"/machines/"+d.MachineName+"/"+"id_rsa")
 	if err != nil {
 		return err
 	}
@@ -202,12 +201,12 @@ func (d *Driver) DriverName() string {
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	log.Debugf("GetCreateFlags called")
 	return []mcnflag.Flag{
-                mcnflag.IntFlag{
-                        EnvVar: "BHYVE_DISK_SIZE",
-                        Name:   "bhyve-disk-size",
-                        Usage:  "Size of disk for host in MB",
-                        Value:  defaultDiskSize,
-                },
+		mcnflag.IntFlag{
+			EnvVar: "BHYVE_DISK_SIZE",
+			Name:   "bhyve-disk-size",
+			Usage:  "Size of disk for host in MB",
+			Value:  defaultDiskSize,
+		},
 		mcnflag.IntFlag{
 			Name:   "bhyve-engine-port",
 			Usage:  "Docker engine port",
@@ -253,27 +252,26 @@ func (d *Driver) GetSSHHostname() (string, error) {
 
 func (d *Driver) GetState() (state.State, error) {
 	log.Debugf("GetState called")
-/*
-	address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
+	/*
+		address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
 
-	_, err := net.DialTimeout("tcp", address, defaultTimeout)
-	if err != nil {
-		return state.Stopped, nil
-	}
-*/
+		_, err := net.DialTimeout("tcp", address, defaultTimeout)
+		if err != nil {
+			return state.Stopped, nil
+		}
+	*/
 
 	return state.Running, nil
 }
 
 func (d *Driver) GetURL() (string, error) {
 	log.Debugf("GetURL called")
-        ip, err := d.GetIP()
-        if err != nil {
-                return "", err
-        }
-        return fmt.Sprintf("tcp://%s:2376", ip), nil
+	ip, err := d.GetIP()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("tcp://%s:2376", ip), nil
 }
-
 
 func (d *Driver) Kill() error {
 	log.Debugf("Kill called")
@@ -282,9 +280,9 @@ func (d *Driver) Kill() error {
 
 func (d *Driver) PreCreateCheck() error {
 	log.Debugf("PreCreateCheck called")
-/*
-	return errors.New("PreCreateCheck not implemented yet")
-*/
+	/*
+		return errors.New("PreCreateCheck not implemented yet")
+	*/
 	return nil
 }
 
@@ -300,12 +298,12 @@ func (d *Driver) Restart() error {
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("SetConfigFromFlags called")
-        disksize := int64(flags.Int("bhyve-disk-size")) * 1024 * 1024
+	disksize := int64(flags.Int("bhyve-disk-size")) * 1024 * 1024
 	log.Debugf("Setting disk size to %d", disksize)
-        d.DiskSize = disksize
+	d.DiskSize = disksize
 	log.Debugf("Setting ip address to", flags.String("bhyve-ip-address"))
-        d.IPAddress= flags.String("bhyve-ip-address")
-        d.SSHUser = "docker"
+	d.IPAddress = flags.String("bhyve-ip-address")
+	d.SSHUser = "docker"
 	return nil
 }
 
@@ -325,8 +323,8 @@ func NewDriver(hostName, storePath string) *Driver {
 		EnginePort: engine.DefaultPort,
 		BaseDriver: &drivers.BaseDriver{
 			MachineName: hostName,
-                        StorePath:   storePath,
+			StorePath:   storePath,
 		},
-                DiskSize:       defaultDiskSize,
+		DiskSize: defaultDiskSize,
 	}
 }
