@@ -182,24 +182,13 @@ func (d *Driver) CreateDiskImage(vmpath string) error {
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
-	for fileExists("/dev/vmm/" + d.MachineName) {
-		log.Debugf("Removing VM %s", d.MachineName)
-		err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+d.MachineName)
-		if err != nil {
-		}
-	}
 	vmpath := d.StorePath + "/machines/" + d.MachineName + "/" + "guest.img"
 	bhyvelogpath := d.StorePath + "/machines/" + d.MachineName + "/" + "bhyve.log"
 	log.Debugf("vmpath: %s", vmpath)
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 	log.Debugf("Deleting %s", vmpath)
 
-	err := os.RemoveAll(vmpath)
-	if err != nil {
-		return err
-	}
-
-	err = d.CreateDiskImage(vmpath)
+	err := d.CreateDiskImage(vmpath)
 	if err != nil {
 		return err
 	}
@@ -336,7 +325,15 @@ func (d *Driver) GetURL() (string, error) {
 
 func (d *Driver) Kill() error {
 	log.Debugf("Kill called")
-	return errors.New("not implemented yet")
+	for fileExists("/dev/vmm/" + d.MachineName) {
+		log.Debugf("Removing VM %s", d.MachineName)
+		err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+d.MachineName)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (d *Driver) PreCreateCheck() error {
@@ -346,7 +343,15 @@ func (d *Driver) PreCreateCheck() error {
 
 func (d *Driver) Remove() error {
 	log.Debugf("Remove called")
-	return errors.New("not implemented yet")
+
+	vmpath := d.StorePath + "/machines/" + d.MachineName + "/" + "guest.img"
+
+	err := os.RemoveAll(vmpath)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *Driver) Restart() error {
