@@ -78,8 +78,13 @@ func findcdpath() (string, error) {
 	return "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso", nil
 }
 
-func (d *Driver) getMachineDir() string {
-	return d.StorePath + "/machines/" + d.MachineName + "/"
+func (d *Driver) getBhyveVMName() (string, error) {
+	username, err := getUsername()
+	if err != nil {
+		return "", err
+	}
+
+	return "docker-machine-" + username + "-" + d.MachineName, nil
 }
 
 func fileExists(filename string) bool {
@@ -91,15 +96,14 @@ func fileExists(filename string) bool {
 }
 
 func (d *Driver) writeDeviceMap() error {
-	md := d.getMachineDir()
-	devmap := md + "device.map"
+	devmap := d.ResolveStorePath("/device.map")
 
 	f, err := os.Create(devmap)
 	if err != nil {
 		return err
 	}
 
-	_, err = f.WriteString("(hd0) " + md + "guest.img\n")
+	_, err = f.WriteString("(hd0) " + d.ResolveStorePath("guest.img") + "\n")
 	if err != nil {
 		return err
 	}
@@ -127,14 +131,14 @@ func (d *Driver) runGrub() error {
 		if err != nil {
 			return err
 		}
-		md := d.getMachineDir()
-		username, err := getUsername()
+
+		vmname, err := d.getBhyveVMName()
 		if err != nil {
 			return err
 		}
 
-		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M",
-			strconv.Itoa(int(d.MemSize))+"M", "docker-machine-"+username+"-"+d.MachineName)
+		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", d.ResolveStorePath("device.map"), "-r", "cd0", "-M",
+			strconv.Itoa(int(d.MemSize))+"M", vmname)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return err
@@ -198,13 +202,18 @@ func getUsername() (string, error) {
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
-	vmpath := d.StorePath + "/machines/" + d.MachineName + "/" + "guest.img"
-	bhyvelogpath := d.StorePath + "/machines/" + d.MachineName + "/" + "bhyve.log"
+	vmpath := d.ResolveStorePath("guest.img")
+	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("vmpath: %s", vmpath)
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 	log.Debugf("Deleting %s", vmpath)
 
-	err := d.CreateDiskImage(vmpath)
+	vmname, err := d.getBhyveVMName()
+	if err != nil {
+		return err
+	}
+
+	err = d.CreateDiskImage(vmpath)
 	if err != nil {
 		return err
 	}
@@ -221,16 +230,12 @@ func (d *Driver) Create() error {
 	cpucount := "2"
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
-	username, err := getUsername()
-	if err != nil {
-		return err
-	}
 
 	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
 		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
 			vmpath, "-s", "4:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
-		"docker-machine-"+username+"-"+d.MachineName)
+		vmname)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
@@ -255,7 +260,8 @@ func (d *Driver) Create() error {
 		}
 	*/
 
-	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa", d.StorePath+"/machines/"+d.MachineName+"/"+"id_rsa")
+	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa",
+		d.ResolveStorePath("/id_rsa"))
 	if err != nil {
 		return err
 	}
@@ -348,10 +354,16 @@ func (d *Driver) GetURL() (string, error) {
 
 func (d *Driver) Kill() error {
 	log.Debugf("Kill called")
+
+	vmname, err := d.getBhyveVMName()
+	if err != nil {
+		return err
+	}
+
 	for maxtries := 0; maxtries < 16; maxtries++ {
-		if fileExists("/dev/vmm/" + d.MachineName) {
+		if fileExists("/dev/vmm/" + vmname) {
 			log.Debugf("Removing VM %s, try %d", d.MachineName, maxtries)
-			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+d.MachineName)
+			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
 			if err != nil {
 				return err
 			}
@@ -371,7 +383,7 @@ func (d *Driver) PreCreateCheck() error {
 func (d *Driver) Remove() error {
 	log.Debugf("Remove called")
 
-	vmpath := d.StorePath + "/machines/" + d.MachineName + "/" + "guest.img"
+	vmpath := d.ResolveStorePath("guest.img")
 
 	err := os.RemoveAll(vmpath)
 	if err != nil {
