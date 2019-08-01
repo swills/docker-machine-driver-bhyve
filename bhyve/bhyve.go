@@ -121,7 +121,6 @@ func (d *Driver) writeDeviceMap() error {
 }
 
 func (d *Driver) runGrub() error {
-	var out = []byte{}
 	for maxtries := 0; maxtries < 16; maxtries++ {
 		err := d.writeDeviceMap()
 		if err != nil {
@@ -153,7 +152,7 @@ func (d *Driver) runGrub() error {
 			}
 		}()
 
-		out, err = cmd.CombinedOutput()
+		out, err := cmd.CombinedOutput()
 		log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
 		if strings.Contains(string(out), "GNU GRUB") {
 			log.Debugf("grub-bhyve: looks OK")
@@ -390,6 +389,7 @@ func (d *Driver) Stop() error {
 	return errors.New("not implemented yet")
 }
 
+//noinspection GoUnusedExportedFunction
 func NewDriver(hostName, storePath string) *Driver {
 	log.Debugf("NewDriver called")
 	return &Driver{
