@@ -165,6 +165,20 @@ func (d *Driver) runGrub() error {
 	return nil
 }
 
+func (d *Driver) CreateDiskImage(vmpath string) error {
+	err := easyCmd("truncate", "-s", strconv.Itoa(int(d.DiskSize)), vmpath)
+	if err != nil {
+		return err
+	}
+
+	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar", "of="+vmpath, "conv=notrunc", "status=none")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
@@ -178,19 +192,14 @@ func (d *Driver) Create() error {
 	bhyvelogpath := d.StorePath + "/machines/" + d.MachineName + "/" + "bhyve.log"
 	log.Debugf("vmpath: %s", vmpath)
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
-
 	log.Debugf("Deleting %s", vmpath)
+
 	err := os.RemoveAll(vmpath)
 	if err != nil {
 		return err
 	}
 
-	err = easyCmd("truncate", "-s", strconv.Itoa(int(d.DiskSize)), vmpath)
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar", "of="+vmpath, "conv=notrunc", "status=none")
+	err = d.CreateDiskImage(vmpath)
 	if err != nil {
 		return err
 	}
