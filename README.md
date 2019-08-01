@@ -16,6 +16,8 @@ docker run --rm hello-world
 
 ### TODO
 
+* Remove reliance on external files
+* Remove reliance on external config
 * Remove hard coded stuff
     * Paths
     * Files
