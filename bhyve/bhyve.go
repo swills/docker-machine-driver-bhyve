@@ -26,6 +26,8 @@ const (
 	defaultDiskSize = 16384 // Mb
 	defaultMemSize  = 1024  // Mb
 	defaultSSHPort  = 22
+	retrycount      = 16
+	sleeptime       = 100 // milliseconds
 )
 
 type Driver struct {
@@ -126,7 +128,7 @@ func (d *Driver) writeDeviceMap() error {
 }
 
 func (d *Driver) runGrub() error {
-	for maxtries := 0; maxtries < 16; maxtries++ {
+	for maxtries := 0; maxtries < retrycount; maxtries++ {
 		err := d.writeDeviceMap()
 		if err != nil {
 			return err
@@ -360,7 +362,7 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
-	for maxtries := 0; maxtries < 16; maxtries++ {
+	for maxtries := 0; maxtries < retrycount; maxtries++ {
 		if fileExists("/dev/vmm/" + vmname) {
 			log.Debugf("Removing VM %s, try %d", d.MachineName, maxtries)
 			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
@@ -370,7 +372,7 @@ func (d *Driver) Kill() error {
 		} else {
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(sleeptime * time.Millisecond)
 	}
 	return fmt.Errorf("Failed to kill %d", d.MachineName)
 }
