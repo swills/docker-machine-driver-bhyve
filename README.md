@@ -1,7 +1,10 @@
 # What is this
 
 This is a [Docker Machine](https://docs.docker.com/machine/overview/) Driver for [Bhyve](http://bhyve.org/). It is
-heavily inspired by both the [xhyve driver](https://github.com/machine-drivers/docker-machine-driver-xhyve) and the [VirtualBox](https://github.com/docker/machine/tree/master/drivers/virtualbox) driver.
+heavily inspired by the [xhyve driver](https://github.com/machine-drivers/docker-machine-driver-xhyve), the
+[generic](https://github.com/docker/machine/tree/master/drivers/generic) driver and the
+[VirtualBox](https://github.com/docker/machine/tree/master/drivers/virtualbox) driver.
+See also [this issue](https://github.com/machine-drivers/docker-machine-driver-xhyve/issues/200).
 
 # How To Use It
 
@@ -19,7 +22,6 @@ docker run --rm hello-world
     * Device names
     * MAC Address
     * CPU Count
-    * Memory Size
     * `nmdm` Device
     * `tap` device
     * Docker port
@@ -33,3 +35,4 @@ docker run --rm hello-world
 * Implement unimplemented funcs
 * Start vs. Create
 * Stop
+* Manage processes (grub-bhyve, bhyve, serial logger)

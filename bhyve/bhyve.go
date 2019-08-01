@@ -12,9 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	/*
-		"net"
-	*/
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/engine"
@@ -25,13 +22,16 @@ import (
 
 const (
 	defaultTimeout  = 15 * time.Second
-	defaultDiskSize = 16384
+	defaultDiskSize = 16384 // Mb
+	defaultMemSize  = 1024  // Mb
+	defaultSSHPort  = 22
 )
 
 type Driver struct {
 	*drivers.BaseDriver
 	EnginePort int
 	DiskSize   int64
+	MemSize    int64
 }
 
 // https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
@@ -129,7 +129,7 @@ func (d *Driver) runGrub() error {
 			return err
 		}
 		md := d.getMachineDir()
-		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M", "1024M", d.MachineName)
+		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M", strconv.Itoa(int(d.MemSize))+"M", d.MachineName)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return err
@@ -206,7 +206,8 @@ func (d *Driver) Create() error {
 	tapdev, err := findtapdev()
 	cdpath, err := findcdpath()
 	cpucount := "2"
-	ram := "1024"
+	ram := strconv.Itoa(int(d.MemSize))
+	log.Debugf("RAM size: " + ram)
 
 	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+vmpath, "-s", "4:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M", d.MachineName)
@@ -251,9 +252,21 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
+			Name:   "bhyve-ssh-port",
+			Usage:  "Port to use for SSH",
+			Value:  defaultSSHPort,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "BHYVE_DISK_SIZE",
 			Name:   "bhyve-disk-size",
 			Usage:  "Size of disk for host in MB",
 			Value:  defaultDiskSize,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "BHYVE_MEM_SIZE",
+			Name:   "bhyve-mem-size",
+			Usage:  "Size of memory for host in MB",
+			Value:  defaultMemSize,
 		},
 		mcnflag.IntFlag{
 			Name:   "bhyve-engine-port",
@@ -278,12 +291,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Value:  "",
 			EnvVar: "BHYVE_SSH_KEY",
 		},
-		mcnflag.IntFlag{
-			Name:   "bhyve-ssh-port",
-			Usage:  "SSH port",
-			Value:  drivers.DefaultSSHPort,
-			EnvVar: "BHYVE_SSH_PORT",
-		},
 	}
 }
 
@@ -303,9 +310,10 @@ func (d *Driver) GetState() (state.State, error) {
 
 	_, err := net.DialTimeout("tcp", address, defaultTimeout)
 	if err != nil {
+		log.Debugf("STATE: stopped")
 		return state.Stopped, nil
 	}
-
+	log.Debugf("STATE: running")
 	return state.Running, nil
 }
 
@@ -340,12 +348,22 @@ func (d *Driver) Restart() error {
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("SetConfigFromFlags called")
+
 	disksize := int64(flags.Int("bhyve-disk-size")) * 1024 * 1024
 	log.Debugf("Setting disk size to %d", disksize)
 	d.DiskSize = disksize
+
+	memsize := int64(flags.Int("bhyve-mem-size"))
+	log.Debugf("Setting mem size to %d", memsize)
+	d.MemSize = memsize
+
 	log.Debugf("Setting ip address to", flags.String("bhyve-ip-address"))
 	d.IPAddress = flags.String("bhyve-ip-address")
+
 	d.SSHUser = "docker"
+	log.Debugf("Setting port to", flags.String("bhyve-ssh-port"))
+	d.SSHPort = flags.Int("bhyve-ssh-port")
+
 	return nil
 }
 
@@ -368,5 +386,6 @@ func NewDriver(hostName, storePath string) *Driver {
 			StorePath:   storePath,
 		},
 		DiskSize: defaultDiskSize,
+		MemSize:  defaultMemSize,
 	}
 }
