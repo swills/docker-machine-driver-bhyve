@@ -25,6 +25,7 @@ const (
 	defaultTimeout  = 15 * time.Second
 	defaultDiskSize = 16384 // Mb
 	defaultMemSize  = 1024  // Mb
+	defaultCPUCount = 1
 	defaultSSHPort  = 22
 	retrycount      = 16
 	sleeptime       = 100 // milliseconds
@@ -35,6 +36,7 @@ type Driver struct {
 	EnginePort int
 	DiskSize   int64
 	MemSize    int64
+	CPUcount   int
 }
 
 // https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
@@ -229,7 +231,7 @@ func (d *Driver) Create() error {
 	macaddr, err := findmacaddr()
 	tapdev, err := findtapdev()
 	cdpath, err := findcdpath()
-	cpucount := "2"
+	cpucount := strconv.Itoa(int(d.CPUcount))
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
 
@@ -295,6 +297,12 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "bhyve-mem-size",
 			Usage:  "Size of memory for host in MB",
 			Value:  defaultMemSize,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "BHYVE_CPUS",
+			Name:   "bhyve-cpus",
+			Usage:  "Number of CPUs in VM",
+			Value:  defaultCPUCount,
 		},
 		mcnflag.IntFlag{
 			Name:   "bhyve-engine-port",
@@ -407,6 +415,10 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("Setting disk size to %d", disksize)
 	d.DiskSize = disksize
 
+	cpucount := int(flags.Int("bhyve-cpus"))
+	log.Debugf("Setting CPU count to %d", cpucount)
+	d.CPUcount = cpucount
+
 	memsize := int64(flags.Int("bhyve-mem-size"))
 	log.Debugf("Setting mem size to %d", memsize)
 	d.MemSize = memsize
@@ -442,5 +454,6 @@ func NewDriver(hostName, storePath string) *Driver {
 		},
 		DiskSize: defaultDiskSize,
 		MemSize:  defaultMemSize,
+		CPUcount: defaultCPUCount,
 	}
 }
