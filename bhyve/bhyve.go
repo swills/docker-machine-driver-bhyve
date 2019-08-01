@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"strconv"
 	"strings"
 	"time"
@@ -127,7 +128,13 @@ func (d *Driver) runGrub() error {
 			return err
 		}
 		md := d.getMachineDir()
-		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M", strconv.Itoa(int(d.MemSize))+"M", d.MachineName)
+		username, err := getUsername()
+		if err != nil {
+			return err
+		}
+
+		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", md+"device.map", "-r", "cd0", "-M",
+			strconv.Itoa(int(d.MemSize))+"M", "docker-machine-"+username+"-"+d.MachineName)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return err
@@ -170,12 +177,22 @@ func (d *Driver) CreateDiskImage(vmpath string) error {
 		return err
 	}
 
-	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar", "of="+vmpath, "conv=notrunc", "status=none")
+	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar",
+		"of="+vmpath, "conv=notrunc", "status=none")
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func getUsername() (string, error) {
+	username, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	return username.Username, nil
 }
 
 func (d *Driver) Create() error {
@@ -204,9 +221,16 @@ func (d *Driver) Create() error {
 	cpucount := "2"
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
+	username, err := getUsername()
+	if err != nil {
+		return err
+	}
 
 	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+vmpath, "-s", "4:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M", d.MachineName)
+	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
+		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
+			vmpath, "-s", "4:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
+		"docker-machine-"+username+"-"+d.MachineName)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
@@ -324,15 +348,19 @@ func (d *Driver) GetURL() (string, error) {
 
 func (d *Driver) Kill() error {
 	log.Debugf("Kill called")
-	for fileExists("/dev/vmm/" + d.MachineName) {
-		log.Debugf("Removing VM %s", d.MachineName)
-		err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+d.MachineName)
-		if err != nil {
-			return err
+	for maxtries := 0; maxtries < 16; maxtries++ {
+		if fileExists("/dev/vmm/" + d.MachineName) {
+			log.Debugf("Removing VM %s, try %d", d.MachineName, maxtries)
+			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+d.MachineName)
+			if err != nil {
+				return err
+			}
+		} else {
+			return nil
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
-
-	return nil
+	return fmt.Errorf("Failed to kill %d", d.MachineName)
 }
 
 func (d *Driver) PreCreateCheck() error {
