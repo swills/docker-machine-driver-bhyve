@@ -8,6 +8,10 @@ See also [this issue](https://github.com/machine-drivers/docker-machine-driver-x
 
 # How To Use It
 
+* Must have `sudo` installed and user running docker-machine must have password-less `sudo` access.
+* Interface `bridge0` must exist and must have a member with a DHCP server on the same network
+* Must know what IP the DHCP is going to give the machine with MAC address `00:A0:98:00:00:02`
+
 ```
 docker-machine create --bhyve-ip-address 10.0.1.119
 eval $(docker-machine env)
@@ -23,9 +27,7 @@ docker run --rm hello-world
     * Files
     * Device names
     * MAC Address
-    * CPU Count
     * `nmdm` Device
-    * `tap` device
     * Docker port
     * `sudo` - may want to use `doas`
     * Avoid shelling out as much as possible
@@ -38,3 +40,4 @@ docker run --rm hello-world
 * Start vs. Create
 * Stop
 * Manage processes (grub-bhyve, bhyve, serial logger)
+* Create vlan, attch vlan to bridge, attach machines to vlan

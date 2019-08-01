@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,7 @@ type Driver struct {
 	DiskSize   int64
 	MemSize    int64
 	CPUcount   int
+	NetDev     string
 }
 
 // https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
@@ -75,7 +77,46 @@ func findmacaddr() (string, error) {
 }
 
 func findtapdev() (string, error) {
-	return "tap1", nil
+	lasttap := 0
+	numtaps := 0
+	nexttap := 0
+	ifaces, _ := net.Interfaces()
+	for _, iface := range ifaces {
+		match, _ := regexp.MatchString("^tap", iface.Name)
+		if match {
+			r := regexp.MustCompile(`tap(?P<num>\d*)`)
+			res := r.FindAllStringSubmatch(iface.Name, -1)
+			tapnum, err := strconv.Atoi(res[0][1])
+			if err != nil {
+			}
+			if tapnum > lasttap {
+				lasttap = tapnum
+			}
+			numtaps = numtaps + 1
+		}
+	}
+	if numtaps > 0 {
+		nexttap = lasttap + 1
+	}
+	log.Debugf("nexttap: %d", nexttap)
+
+	nexttapname := "tap" + strconv.Itoa(nexttap)
+	err := easyCmd("sudo", "ifconfig", nexttapname, "create")
+	if err != nil {
+		return "", err
+	}
+
+	err = easyCmd("sudo", "ifconfig", "bridge0", "addm", nexttapname)
+	if err != nil {
+		return "", err
+	}
+
+	err = easyCmd("sudo", "ifconfig", nexttapname, "up")
+	if err != nil {
+		return "", err
+	}
+
+	return nexttapname, nil
 }
 
 func findcdpath() (string, error) {
@@ -230,6 +271,7 @@ func (d *Driver) Create() error {
 	nmdmdev, err := findnmdmdev()
 	macaddr, err := findmacaddr()
 	tapdev, err := findtapdev()
+	d.NetDev = tapdev
 	cdpath, err := findcdpath()
 	cpucount := strconv.Itoa(int(d.CPUcount))
 	ram := strconv.Itoa(int(d.MemSize))
@@ -342,9 +384,20 @@ func (d *Driver) GetSSHHostname() (string, error) {
 
 func (d *Driver) GetState() (state.State, error) {
 	log.Debugf("GetState called")
+
+	vmname, err := d.getBhyveVMName()
+	if err != nil {
+		return state.Stopped, nil
+	}
+
+	if !fileExists("/dev/vmm/" + vmname) {
+
+		return state.Stopped, nil
+	}
+
 	address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
 
-	_, err := net.DialTimeout("tcp", address, defaultTimeout)
+	_, err = net.DialTimeout("tcp", address, defaultTimeout)
 	if err != nil {
 		log.Debugf("STATE: stopped")
 		return state.Stopped, nil
@@ -378,11 +431,15 @@ func (d *Driver) Kill() error {
 				return err
 			}
 		} else {
+			err := easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
+			if err != nil {
+			}
+
 			return nil
 		}
 		time.Sleep(sleeptime * time.Millisecond)
 	}
-	return fmt.Errorf("Failed to kill %d", d.MachineName)
+	return fmt.Errorf("failed to kill %d", d.MachineName)
 }
 
 func (d *Driver) PreCreateCheck() error {
