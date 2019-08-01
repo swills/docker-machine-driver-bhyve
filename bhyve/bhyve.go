@@ -121,8 +121,7 @@ func (d *Driver) writeDeviceMap() error {
 }
 
 func (d *Driver) runGrub() error {
-	out := []byte{}
-
+	var out = []byte{}
 	for maxtries := 0; maxtries < 16; maxtries++ {
 		err := d.writeDeviceMap()
 		if err != nil {
