@@ -423,23 +423,27 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
-	for maxtries := 0; maxtries < retrycount; maxtries++ {
+	tries := 0
+	for ; tries < retrycount; tries++ {
 		if fileExists("/dev/vmm/" + vmname) {
-			log.Debugf("Removing VM %s, try %d", d.MachineName, maxtries)
+			log.Debugf("Removing VM %s, try %d", d.MachineName, tries)
 			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
 			if err != nil {
-				return err
 			}
-		} else {
-			err := easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
-			if err != nil {
-			}
-
-			return nil
+			time.Sleep(sleeptime * time.Millisecond)
 		}
-		time.Sleep(sleeptime * time.Millisecond)
 	}
-	return fmt.Errorf("failed to kill %d", d.MachineName)
+
+	if tries > retrycount {
+		return fmt.Errorf("failed to kill %d", d.MachineName)
+	}
+
+	err = easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *Driver) PreCreateCheck() error {
