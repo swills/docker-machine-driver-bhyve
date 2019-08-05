@@ -390,20 +390,18 @@ func (d *Driver) GetState() (state.State, error) {
 		return state.Stopped, nil
 	}
 
-	if !fileExists("/dev/vmm/" + vmname) {
+	if fileExists("/dev/vmm/" + vmname) {
+		address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
 
-		return state.Stopped, nil
+		_, err = net.DialTimeout("tcp", address, defaultTimeout)
+		if err != nil {
+			log.Debugf("STATE: stopped")
+			return state.Error, nil
+		}
+		log.Debugf("STATE: running")
+		return state.Running, nil
 	}
-
-	address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
-
-	_, err = net.DialTimeout("tcp", address, defaultTimeout)
-	if err != nil {
-		log.Debugf("STATE: stopped")
-		return state.Stopped, nil
-	}
-	log.Debugf("STATE: running")
-	return state.Running, nil
+	return state.Stopped, nil
 }
 
 func (d *Driver) GetURL() (string, error) {
