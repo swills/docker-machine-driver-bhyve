@@ -26,11 +26,9 @@ import (
 )
 
 const (
-	defaultTimeout  = 5 * time.Second
 	defaultDiskSize = 16384 // Mb
 	defaultMemSize  = 1024  // Mb
 	defaultCPUCount = 1
-	defaultSSHPort  = 22
 	retrycount      = 16
 	sleeptime       = 100 // milliseconds
 )
@@ -108,7 +106,7 @@ func findnmdmdev() (string, error) {
 			lastnmdm++
 		}
 		if lastnmdm > 100 {
-			return "", errors.New("Could not find nmdm dev")
+			return "", errors.New("could not find nmdm dev")
 		}
 		time.Sleep(1 * time.Second)
 	}
@@ -330,12 +328,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	return []mcnflag.Flag{
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
-			Name:   "bhyve-ssh-port",
-			Usage:  "Port to use for SSH (default: 22)",
-			Value:  defaultSSHPort,
-		},
-		mcnflag.IntFlag{
-			EnvVar: "BHYVE_DISK_SIZE",
 			Name:   "bhyve-disk-size",
 			Usage:  "Size of disk for host in MB (default: 16384)",
 			Value:  defaultDiskSize,
@@ -434,7 +426,7 @@ func (d *Driver) waitForIP() error {
 	}
 
 	if ip == "" {
-		return fmt.Errorf("Machine didn't return an IP after 120 seconds, aborting")
+		return fmt.Errorf("machine didn't return an IP after 120 seconds, aborting")
 	}
 
 	// Wait for SSH over NAT to be available before returning to user
@@ -515,7 +507,7 @@ func (d *Driver) Kill() error {
 	}
 
 	if tries > retrycount {
-		return fmt.Errorf("failed to kill %d", d.MachineName)
+		return fmt.Errorf("failed to kill %s", d.MachineName)
 	}
 
 	err = easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
@@ -589,8 +581,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.MACAddress = mac
 
 	d.SSHUser = "docker"
-	log.Debugf("Setting port to", flags.String("bhyve-ssh-port"))
-	d.SSHPort = flags.Int("bhyve-ssh-port")
 
 	return nil
 }
@@ -676,7 +666,7 @@ func (d *Driver) Stop() error {
 	}
 
 	if tries > retrycount {
-		return fmt.Errorf("failed to kill %d", d.MachineName)
+		return fmt.Errorf("failed to kill %s", d.MachineName)
 	}
 
 	err = easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
