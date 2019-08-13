@@ -1,7 +1,10 @@
 package bhyve
 
 import (
+	"bufio"
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -23,7 +26,7 @@ import (
 )
 
 const (
-	defaultTimeout  = 15 * time.Second
+	defaultTimeout  = 5 * time.Second
 	defaultDiskSize = 16384 // Mb
 	defaultMemSize  = 1024  // Mb
 	defaultCPUCount = 1
@@ -39,6 +42,7 @@ type Driver struct {
 	MemSize    int64
 	CPUcount   int
 	NetDev     string
+	MACAddress string
 }
 
 // https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
@@ -53,6 +57,16 @@ func stripCtlAndExtFromBytes(str string) string {
 		}
 	}
 	return string(b[:bl])
+}
+
+// https://sosedoff.com/2014/12/15/generate-random-hex-string-in-go.html
+
+func randomHex(n int) (string, error) {
+	randbytes := make([]byte, n)
+	if _, err := rand.Read(randbytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(randbytes), nil
 }
 
 func easyCmd(args ...string) error {
@@ -72,8 +86,21 @@ func findnmdmdev() (string, error) {
 	return "/dev/nmdm1A", nil
 }
 
-func findmacaddr() (string, error) {
-	return "00:A0:98:00:00:02", nil
+func generatemacaddr() (string, error) {
+	oidprefix := "58:9c:fc"
+	b1, err := randomHex(1)
+	if err != nil {
+		return "", err
+	}
+	b2, err := randomHex(1)
+	if err != nil {
+		return "", err
+	}
+	b3, err := randomHex(1)
+	if err != nil {
+		return "", err
+	}
+	return oidprefix + ":" + b1 + ":" + b2 + ":" + b3, nil
 }
 
 func findtapdev() (string, error) {
@@ -171,17 +198,17 @@ func (d *Driver) writeDeviceMap() error {
 }
 
 func (d *Driver) runGrub() error {
+	err := d.writeDeviceMap()
+	if err != nil {
+		return err
+	}
+
+	vmname, err := d.getBhyveVMName()
+	if err != nil {
+		return err
+	}
+
 	for maxtries := 0; maxtries < retrycount; maxtries++ {
-		err := d.writeDeviceMap()
-		if err != nil {
-			return err
-		}
-
-		vmname, err := d.getBhyveVMName()
-		if err != nil {
-			return err
-		}
-
 		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", d.ResolveStorePath("device.map"), "-r", "cd0", "-M",
 			strconv.Itoa(int(d.MemSize))+"M", vmname)
 		stdin, err := cmd.StdinPipe()
@@ -214,7 +241,7 @@ func (d *Driver) runGrub() error {
 			log.Debugf("grub-bhyve: looks OK")
 			return nil
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(sleeptime * time.Millisecond)
 	}
 
 	return nil
@@ -269,7 +296,7 @@ func (d *Driver) Create() error {
 	}
 
 	nmdmdev, err := findnmdmdev()
-	macaddr, err := findmacaddr()
+	macaddr := d.MACAddress
 	tapdev, err := findtapdev()
 	d.NetDev = tapdev
 	cdpath, err := findcdpath()
@@ -280,7 +307,7 @@ func (d *Driver) Create() error {
 	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
 		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
-			vmpath, "-s", "4:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
+			vmpath, "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
 		vmname)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -306,6 +333,11 @@ func (d *Driver) Create() error {
 		}
 	*/
 
+	/*
+		log.Debugf("Waiting for VM to boot")
+		time.Sleep(60 * time.Second) // give VM 30 seconds to boot
+	*/
+
 	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa",
 		d.ResolveStorePath("/id_rsa"))
 	if err != nil {
@@ -325,41 +357,46 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
 			Name:   "bhyve-ssh-port",
-			Usage:  "Port to use for SSH",
+			Usage:  "Port to use for SSH (default: 22)",
 			Value:  defaultSSHPort,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
 			Name:   "bhyve-disk-size",
-			Usage:  "Size of disk for host in MB",
+			Usage:  "Size of disk for host in MB (default: 16384)",
 			Value:  defaultDiskSize,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_MEM_SIZE",
 			Name:   "bhyve-mem-size",
-			Usage:  "Size of memory for host in MB",
+			Usage:  "Size of memory for host in MB (default: 1024)",
 			Value:  defaultMemSize,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_CPUS",
 			Name:   "bhyve-cpus",
-			Usage:  "Number of CPUs in VM",
+			Usage:  "Number of CPUs in VM (default: 1)",
 			Value:  defaultCPUCount,
 		},
 		mcnflag.IntFlag{
 			Name:   "bhyve-engine-port",
-			Usage:  "Docker engine port",
+			Usage:  "Docker engine port (default: 2376)",
 			Value:  engine.DefaultPort,
 			EnvVar: "BHYVE_ENGINE_PORT",
 		},
 		mcnflag.StringFlag{
 			Name:   "bhyve-ip-address",
-			Usage:  "IP Address of machine",
+			Usage:  "IP Address of machine (default: obtained via DHCP)",
+			EnvVar: "BHYVE_IP_ADDRESS",
+		},
+		mcnflag.StringFlag{
+			Name:   "bhyve-mac-address",
+			Usage:  "MAC Address of machine (default: generated)",
 			EnvVar: "BHYVE_IP_ADDRESS",
 		},
 		mcnflag.StringFlag{
 			Name:   "bhyve-ssh-user",
-			Usage:  "SSH user",
+			Usage:  "SSH user (default: docker)",
 			Value:  drivers.DefaultSSHUser,
 			EnvVar: "BHYVE_SSH_USER",
 		},
@@ -372,9 +409,56 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	}
 }
 
+func (d *Driver) getIPfromDHCPLease() (string, error) {
+	leasefile := "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/bhyve.leases"
+
+	file, err := os.Open(leasefile)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		// log.Debugf(line)
+		if strings.Contains(line, d.MACAddress) {
+			log.Debugf("Found our MAC")
+			words := strings.Fields(line)
+			log.Debugf("IP is: " + words[2])
+			d.IPAddress = words[2]
+			return d.IPAddress, nil
+		}
+	}
+	/*	for maxtries := 0; maxtries < retrycount; maxtries++ {
+			time.Sleep(5000 * time.Millisecond)
+		}
+	*/
+	return "", errors.New("IP Not Found")
+}
+
 func (d *Driver) GetIP() (string, error) {
 	log.Debugf("GetIP called")
-	return d.IPAddress, nil
+	s, err := d.GetState()
+	if err != nil {
+		log.Debugf("Couldn't get state")
+		return "", err
+	}
+	if s != state.Running {
+		log.Debugf("Host not running")
+		return "", drivers.ErrHostIsNotRunning
+	}
+
+	if d.IPAddress != "" {
+		log.Debugf("Returning saved IP " + d.IPAddress)
+		return d.IPAddress, nil
+	}
+
+	log.Debugf("getting IP from DHCP lease")
+	return d.getIPfromDHCPLease()
 }
 
 func (d *Driver) GetSSHHostname() (string, error) {
@@ -441,6 +525,7 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
+	d.IPAddress = ""
 	return nil
 }
 
@@ -485,6 +570,13 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("Setting ip address to", flags.String("bhyve-ip-address"))
 	d.IPAddress = flags.String("bhyve-ip-address")
 
+	/*
+		log.Debugf("Setting MAC address to", flags.String("bhyve-mac-address"))
+	*/
+	mac, _ := generatemacaddr()
+	log.Debugf("Setting MAC address to", mac)
+	d.MACAddress = mac
+
 	d.SSHUser = "docker"
 	log.Debugf("Setting port to", flags.String("bhyve-ssh-port"))
 	d.SSHPort = flags.Int("bhyve-ssh-port")
@@ -499,7 +591,33 @@ func (d *Driver) Start() error {
 
 func (d *Driver) Stop() error {
 	log.Debugf("Stop called")
-	return errors.New("not implemented yet")
+	vmname, err := d.getBhyveVMName()
+	if err != nil {
+		return err
+	}
+
+	tries := 0
+	for ; tries < retrycount; tries++ {
+		if fileExists("/dev/vmm/" + vmname) {
+			log.Debugf("Removing VM %s, try %d", d.MachineName, tries)
+			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
+			if err != nil {
+			}
+			time.Sleep(sleeptime * time.Millisecond)
+		}
+	}
+
+	if tries > retrycount {
+		return fmt.Errorf("failed to kill %d", d.MachineName)
+	}
+
+	err = easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
+	if err != nil {
+		return err
+	}
+
+	d.IPAddress = ""
+	return nil
 }
 
 //noinspection GoUnusedExportedFunction
@@ -511,8 +629,9 @@ func NewDriver(hostName, storePath string) *Driver {
 			MachineName: hostName,
 			StorePath:   storePath,
 		},
-		DiskSize: defaultDiskSize,
-		MemSize:  defaultMemSize,
-		CPUcount: defaultCPUCount,
+		DiskSize:   defaultDiskSize,
+		MemSize:    defaultMemSize,
+		CPUcount:   defaultCPUCount,
+		MACAddress: "",
 	}
 }
