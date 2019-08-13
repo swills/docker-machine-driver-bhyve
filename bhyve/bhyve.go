@@ -560,8 +560,21 @@ func (d *Driver) Remove() error {
 }
 
 func (d *Driver) Restart() error {
-	log.Debugf("Restart called")
-	return errors.New("not implemented yet")
+	s, err := d.GetState()
+	if err != nil {
+		return err
+	}
+	if s == state.Running {
+		if err := d.Stop(); err != nil {
+			return err
+		}
+	}
+
+	if err := d.Start(); err != nil {
+		return err
+	}
+
+	return d.waitForIP()
 }
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
