@@ -360,18 +360,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "MAC Address of machine (default: generated)",
 			EnvVar: "BHYVE_IP_ADDRESS",
 		},
-		mcnflag.StringFlag{
-			Name:   "bhyve-ssh-user",
-			Usage:  "SSH user (default: docker)",
-			Value:  drivers.DefaultSSHUser,
-			EnvVar: "BHYVE_SSH_USER",
-		},
-		mcnflag.StringFlag{
-			Name:   "bhyve-ssh-key",
-			Usage:  "SSH private key path (if not provided, default SSH key will be used)",
-			Value:  "",
-			EnvVar: "BHYVE_SSH_KEY",
-		},
 	}
 }
 
