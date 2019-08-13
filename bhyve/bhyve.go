@@ -45,8 +45,8 @@ type Driver struct {
 	MACAddress string
 }
 
-// https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
 func stripCtlAndExtFromBytes(str string) string {
+	// https://rosettacode.org/wiki/Strip_control_codes_and_extended_characters_from_a_string#Go
 	b := make([]byte, len(str))
 	var bl int
 	for i := 0; i < len(str); i++ {
@@ -59,9 +59,8 @@ func stripCtlAndExtFromBytes(str string) string {
 	return string(b[:bl])
 }
 
-// https://sosedoff.com/2014/12/15/generate-random-hex-string-in-go.html
-
 func randomHex(n int) (string, error) {
+	// https://sosedoff.com/2014/12/15/generate-random-hex-string-in-go.html
 	randbytes := make([]byte, n)
 	if _, err := rand.Read(randbytes); err != nil {
 		return "", err
@@ -409,10 +408,7 @@ func (d *Driver) getIPfromDHCPLease() (string, error) {
 			return d.IPAddress, nil
 		}
 	}
-	/*	for maxtries := 0; maxtries < retrycount; maxtries++ {
-			time.Sleep(5000 * time.Millisecond)
-		}
-	*/
+
 	return "", errors.New("IP Not Found")
 }
 
@@ -484,16 +480,6 @@ func (d *Driver) GetState() (state.State, error) {
 	}
 
 	if fileExists("/dev/vmm/" + vmname) {
-		// Breaks startup
-		/*
-			address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
-
-			_, err = net.DialTimeout("tcp", address, defaultTimeout)
-			if err != nil {
-				log.Debugf("STATE: stopped")
-				return state.Error, nil
-			}
-		*/
 		log.Debugf("STATE: running")
 		return state.Running, nil
 	}
@@ -657,18 +643,6 @@ func (d *Driver) Start() error {
 		return err
 	}
 	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
-
-	/*
-		err = easyCmd("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-		if err != nil {
-			return err
-		}
-	*/
-
-	/*
-		log.Debugf("Waiting for VM to boot")
-		time.Sleep(60 * time.Second) // give VM 30 seconds to boot
-	*/
 
 	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa",
 		d.ResolveStorePath("/id_rsa"))
