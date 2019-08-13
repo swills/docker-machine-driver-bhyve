@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -83,9 +84,9 @@ func findnmdmdev() (string, error) {
 	lastnmdm := 0
 
 	for {
-		nmdmdev := "/dev/nmdm" + strconv.Itoa(lastnmdm) + "A"
-		log.Debugf("checking nmdm: %s", nmdmdev)
-		cmd := exec.Command("sudo", "fuser", nmdmdev)
+		nmdmdev := "/dev/nmdm" + strconv.Itoa(lastnmdm)
+		log.Debugf("checking nmdm: %s", nmdmdev+"A")
+		cmd := exec.Command("sudo", "fuser", nmdmdev+"A")
 		var stdout bytes.Buffer
 		var stderr bytes.Buffer
 		cmd.Stdout = &stdout
@@ -378,13 +379,11 @@ func (d *Driver) getIPfromDHCPLease() (string, error) {
 	}
 	for scanner.Scan() {
 		line := scanner.Text()
-		// log.Debugf(line)
 		if strings.Contains(line, d.MACAddress) {
 			log.Debugf("Found our MAC")
 			words := strings.Fields(line)
 			log.Debugf("IP is: " + words[2])
 			d.IPAddress = words[2]
-			// easyCmd("ping", "-c", "1", d.IPAddress)
 			return d.IPAddress, nil
 		}
 	}
@@ -504,6 +503,13 @@ func (d *Driver) Kill() error {
 	}
 
 	d.IPAddress = ""
+	nmdmpid, err := ioutil.ReadFile(d.ResolveStorePath("nmdm.pid"))
+	if err == nil {
+		err = easyCmd("kill", string(nmdmpid))
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -600,10 +606,19 @@ func (d *Driver) Start() error {
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
 
-	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		return err
+	}
+
+	err = easyCmd("/usr/sbin/daemon", "-f", "-p", d.ResolveStorePath("nmdm.pid"), dir+"/nmdm", nmdmdev+"B", d.ResolveStorePath("console.log"))
+	if err != nil {
+		return err
+	}
+
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
 		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
-			vmpath, "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
+			vmpath, "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev+"A", "-c", cpucount, "-m", ram+"M",
 		vmname)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -663,6 +678,13 @@ func (d *Driver) Stop() error {
 	}
 
 	d.IPAddress = ""
+	nmdmpid, err := ioutil.ReadFile(d.ResolveStorePath("nmdm.pid"))
+	if err == nil {
+		err = easyCmd("kill", string(nmdmpid))
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
