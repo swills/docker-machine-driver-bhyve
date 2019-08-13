@@ -14,7 +14,8 @@ See also [this issue](https://github.com/machine-drivers/docker-machine-driver-x
 ## One time setup
 
 ### Setup devfs
-Add these lines to /etc/devfs.rules:
+
+Add user to wheel group, then add these lines to /etc/devfs.rules:
 
 ```
 [system=10]
