@@ -343,6 +343,11 @@ func (d *Driver) Create() error {
 	if err != nil {
 		return err
 	}
+
+	if err := d.waitForIP(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -430,6 +435,7 @@ func (d *Driver) getIPfromDHCPLease() (string, error) {
 			words := strings.Fields(line)
 			log.Debugf("IP is: " + words[2])
 			d.IPAddress = words[2]
+			// easyCmd("ping", "-c", "1", d.IPAddress)
 			return d.IPAddress, nil
 		}
 	}
@@ -438,6 +444,39 @@ func (d *Driver) getIPfromDHCPLease() (string, error) {
 		}
 	*/
 	return "", errors.New("IP Not Found")
+}
+
+func (d *Driver) waitForIP() error {
+	var ip string
+	var err error
+
+	log.Infof("Waiting for VM to come online...")
+	for i := 1; i <= 60; i++ {
+		ip, err = d.getIPfromDHCPLease()
+		if err != nil {
+			log.Debugf("Not there yet %d/%d, error: %s", i, 60, err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		if ip != "" {
+			log.Debugf("Got an ip: %s", ip)
+			d.IPAddress = ip
+
+			break
+		}
+	}
+
+	if ip == "" {
+		return fmt.Errorf("Machine didn't return an IP after 120 seconds, aborting")
+	}
+
+	// Wait for SSH over NAT to be available before returning to user
+	if err := drivers.WaitForSSH(d); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *Driver) GetIP() (string, error) {
@@ -475,13 +514,15 @@ func (d *Driver) GetState() (state.State, error) {
 	}
 
 	if fileExists("/dev/vmm/" + vmname) {
-		address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
+		/*
+			address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
 
-		_, err = net.DialTimeout("tcp", address, defaultTimeout)
-		if err != nil {
-			log.Debugf("STATE: stopped")
-			return state.Error, nil
-		}
+			_, err = net.DialTimeout("tcp", address, defaultTimeout)
+			if err != nil {
+				log.Debugf("STATE: stopped")
+				return state.Error, nil
+			}
+		*/
 		log.Debugf("STATE: running")
 		return state.Running, nil
 	}
