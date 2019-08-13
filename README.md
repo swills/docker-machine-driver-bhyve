@@ -65,7 +65,6 @@ docker run --rm hello-world
 * Avoid shelling out as much as possible
 
 * Fetch ISO
-* Log console
 * Manage processes (grub-bhyve, bhyve, serial logger)
 * Networking
     * Create VLAN
