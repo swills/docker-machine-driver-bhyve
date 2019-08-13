@@ -83,7 +83,36 @@ func easyCmd(args ...string) error {
 }
 
 func findnmdmdev() (string, error) {
-	return "/dev/nmdm1A", nil
+	lastnmdm := 0
+
+	for {
+		nmdmdev := "/dev/nmdm" + strconv.Itoa(lastnmdm) + "A"
+		log.Debugf("checking nmdm: %s", nmdmdev)
+		cmd := exec.Command("sudo", "fuser", nmdmdev)
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if err != nil {
+			return "", err
+		}
+		out := stdout.String()
+		// Check if fuser reported anything
+		log.Debugf("status: %s", out)
+		words := strings.Fields(out)
+		if len(words) < 1 {
+			log.Debugf("using %s", nmdmdev)
+			return nmdmdev, nil
+		} else {
+			log.Debugf("can't use %s, trying next device", nmdmdev)
+			lastnmdm++
+		}
+		if lastnmdm > 100 {
+			return "", errors.New("Could not find nmdm dev")
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func generatemacaddr() (string, error) {
@@ -514,6 +543,7 @@ func (d *Driver) GetState() (state.State, error) {
 	}
 
 	if fileExists("/dev/vmm/" + vmname) {
+		// Breaks startup
 		/*
 			address := net.JoinHostPort(d.IPAddress, strconv.Itoa(d.SSHPort))
 

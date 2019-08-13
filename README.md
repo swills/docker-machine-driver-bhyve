@@ -10,13 +10,47 @@ See also [this issue](https://github.com/machine-drivers/docker-machine-driver-x
 
 * Must have `sudo` installed and user running docker-machine must have password-less `sudo` access.
 * Interface `bridge0` must exist and must have a member with a DHCP server on the same network
-* Must know what IP the DHCP is going to give the machine with MAC address `00:A0:98:00:00:02`
+
+## One time setup
+
+### Setup devfs
+Add these lines to /etc/devfs.rules:
 
 ```
-docker-machine create --bhyve-ip-address 10.0.1.119
+[system=10]
+add path 'nmdm*' mode 0660
+```
+
+Set `devfs_system_ruleset="system"` in `/etc/rc.conf` and run `service devfs restart`
+
+### Setup bhyve
+
+Add `ng_ether`, `nmdm` and `vmm` to `kld_list` in `/etc/rc.conf`, `kldload ng_ether`, `kldload vmm`, `kldload nmdm`.
+
+## Build
+
+```
+make
+```
+
+## Setup
+
+```
+export MACHINE_DRIVER=bhyve
+export PATH=${PATH}:${PWD}
+```
+
+## Normal usage
+
+```
+docker-machine kill default || :
+docker-machine rm -y default || :
+
+docker-machine create
 eval $(docker-machine env)
 docker run --rm hello-world
 ```
+
 
 ### TODO
 
@@ -34,10 +68,12 @@ docker run --rm hello-world
 
 * Fetch ISO
 * Log console
-* Fix removing VM
-* Fix state
-* Implement unimplemented funcs
 * Start vs. Create
 * Stop
 * Manage processes (grub-bhyve, bhyve, serial logger)
-* Create vlan, attch vlan to bridge, attach machines to vlan
+* Networking
+    * Create VLAN
+    * Run DHCP server
+    * Attach VLAN to bridge
+    * Attach machines to VLAN
+    * Get IP from DHCP server
