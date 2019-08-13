@@ -59,12 +59,9 @@ docker run --rm hello-world
 * Remove hard coded stuff
     * Paths
     * Files
-    * Device names
-    * MAC Address
-    * `nmdm` Device
     * Docker port
     * `sudo` - may want to use `doas`
-    * Avoid shelling out as much as possible
+* Avoid shelling out as much as possible
 
 * Fetch ISO
 * Log console
