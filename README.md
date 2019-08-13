@@ -65,8 +65,6 @@ docker run --rm hello-world
 
 * Fetch ISO
 * Log console
-* Start vs. Create
-* Stop
 * Manage processes (grub-bhyve, bhyve, serial logger)
 * Networking
     * Create VLAN
