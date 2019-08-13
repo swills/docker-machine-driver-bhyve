@@ -304,76 +304,17 @@ func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
 	vmpath := d.ResolveStorePath("guest.img")
-	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("vmpath: %s", vmpath)
+	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
-	log.Debugf("Deleting %s", vmpath)
 
-	vmname, err := d.getBhyveVMName()
+	err := d.CreateDiskImage(vmpath)
 	if err != nil {
 		return err
 	}
 
-	err = d.CreateDiskImage(vmpath)
-	if err != nil {
-		return err
-	}
-
-	err = d.runGrub()
-	if err != nil {
-		return err
-	}
-
-	nmdmdev, err := findnmdmdev()
-	macaddr := d.MACAddress
-	tapdev, err := findtapdev()
-	d.NetDev = tapdev
-	cdpath, err := findcdpath()
-	cpucount := strconv.Itoa(int(d.CPUcount))
-	ram := strconv.Itoa(int(d.MemSize))
-	log.Debugf("RAM size: " + ram)
-
-	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
-		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
-			vmpath, "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
-		vmname)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	slurp, _ := ioutil.ReadAll(stderr)
-	log.Debugf("%s\n", slurp)
-
-	if err := cmd.Wait(); err != nil {
-		return err
-	}
-	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
-
-	/*
-		err = easyCmd("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
-		if err != nil {
-			return err
-		}
-	*/
-
-	/*
-		log.Debugf("Waiting for VM to boot")
-		time.Sleep(60 * time.Second) // give VM 30 seconds to boot
-	*/
-
-	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa",
-		d.ResolveStorePath("/id_rsa"))
-	if err != nil {
-		return err
-	}
-
-	if err := d.waitForIP(); err != nil {
+	log.Infof("Starting %s...", d.MachineName)
+	if err := d.Start(); err != nil {
 		return err
 	}
 
@@ -657,7 +598,76 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 func (d *Driver) Start() error {
 	log.Debugf("Start called")
-	return errors.New("not implemented yet")
+
+	vmpath := d.ResolveStorePath("guest.img")
+	log.Debugf("vmpath: %s", vmpath)
+	bhyvelogpath := d.ResolveStorePath("bhyve.log")
+	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
+
+	vmname, err := d.getBhyveVMName()
+	if err != nil {
+		return err
+	}
+
+	err = d.runGrub()
+	if err != nil {
+		return err
+	}
+
+	nmdmdev, err := findnmdmdev()
+	macaddr := d.MACAddress
+	tapdev, err := findtapdev()
+	d.NetDev = tapdev
+	cdpath, err := findcdpath()
+	cpucount := strconv.Itoa(int(d.CPUcount))
+	ram := strconv.Itoa(int(d.MemSize))
+	log.Debugf("RAM size: " + ram)
+
+	// cmd = exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-o", bhyvelogpath, "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
+	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
+		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
+			vmpath, "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev, "-c", cpucount, "-m", ram+"M",
+		vmname)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	slurp, _ := ioutil.ReadAll(stderr)
+	log.Debugf("%s\n", slurp)
+
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
+	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
+
+	/*
+		err = easyCmd("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s", "0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net," + tapdev + ",mac=" + macaddr, "-s", "3:0,virtio-blk," + vmpath, "-s", "4:0,ahci-cd," + cdpath, "-l", "com1," + nmdmdev, "-c", cpucount, "-m", ram + "M", d.MachineName)
+		if err != nil {
+			return err
+		}
+	*/
+
+	/*
+		log.Debugf("Waiting for VM to boot")
+		time.Sleep(60 * time.Second) // give VM 30 seconds to boot
+	*/
+
+	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa",
+		d.ResolveStorePath("/id_rsa"))
+	if err != nil {
+		return err
+	}
+
+	if err := d.waitForIP(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *Driver) Stop() error {
