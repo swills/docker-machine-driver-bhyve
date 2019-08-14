@@ -365,9 +365,10 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 }
 
 func (d *Driver) getIPfromDHCPLease() (string, error) {
-	leasefile := "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/bhyve.leases"
+	dhcpdir := d.StorePath
+	dhcpleasefile := filepath.Join(dhcpdir, "bhyve.leases")
 
-	file, err := os.Open(leasefile)
+	file, err := os.Open(dhcpleasefile)
 	if err != nil {
 		return "", err
 	}
@@ -513,8 +514,30 @@ func (d *Driver) Kill() error {
 	return nil
 }
 
+func (d *Driver) StartDHCPServer() error {
+	log.Debugf("Starting DHCP Server")
+
+	dhcpdir := d.StorePath
+	dhcppidfile := filepath.Join(dhcpdir, "dnsmasq.pid")
+	dhcpconffile := filepath.Join(dhcpdir, "dnsmasq.conf")
+	dhcpleasefile := filepath.Join(dhcpdir, "bhyve.leases")
+
+	if !fileExists(dhcppidfile) {
+		err := easyCmd("sudo", "dnsmasq", "-i", "bridge0", "-C", dhcpconffile, "-x", dhcppidfile, "-l", dhcpleasefile)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (d *Driver) PreCreateCheck() error {
 	log.Debugf("preCreateCheck called")
+
+	err := d.StartDHCPServer()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
