@@ -356,9 +356,9 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Value:  defaultBridge,
 		},
 		mcnflag.StringFlag{
-			Name:   "bhyve-dhcp-range",
+			Name:   "bhyve-dhcprange",
 			Usage:  "DHCP Range to use (default: " + defaultDHCPRange + ")",
-			EnvVar: "BHYVE_RANGE",
+			EnvVar: "BHYVE_DHCPRANGE",
 			Value:  defaultDHCPRange,
 		},
 	}
@@ -630,7 +630,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("Setting bridge to %s", bridge)
 	d.Bridge = bridge
 
-	dhcprange := string(flags.String("bhyve-dhcp-range"))
+	dhcprange := string(flags.String("bhyve-dhcprange"))
 	log.Debugf("Setting DHCP range to %s", dhcprange)
 	d.DHCPRange = dhcprange
 
