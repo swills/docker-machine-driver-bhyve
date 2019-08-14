@@ -1,7 +1,5 @@
 docker-machine-driver-bhyve
-boot2docker.iso
-guest.img
-device.map
+nmdm
 
 # Binaries for programs and plugins
 *.exe
