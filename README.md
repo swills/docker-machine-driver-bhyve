@@ -63,12 +63,8 @@ docker run --rm hello-world
     * Docker port
     * `sudo` - may want to use `doas`
 * Avoid shelling out as much as possible
-
 * Fetch ISO
 * Manage processes (grub-bhyve, bhyve, serial logger)
 * Networking
     * Create VLAN
-    * Run DHCP server
     * Attach VLAN to bridge
-    * Attach machines to VLAN
-    * Get IP from DHCP server

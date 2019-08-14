@@ -27,11 +27,13 @@ import (
 )
 
 const (
-	defaultDiskSize = 16384 // Mb
-	defaultMemSize  = 1024  // Mb
-	defaultCPUCount = 1
-	retrycount      = 16
-	sleeptime       = 100 // milliseconds
+	defaultDiskSize  = 16384 // Mb
+	defaultMemSize   = 1024  // Mb
+	defaultCPUCount  = 1
+	defaultBridge    = "bridge0"
+	defaultDHCPRange = "192.168.8.10,192.168.8.254"
+	retrycount       = 16
+	sleeptime        = 100 // milliseconds
 )
 
 type Driver struct {
@@ -42,6 +44,8 @@ type Driver struct {
 	CPUcount   int
 	NetDev     string
 	MACAddress string
+	Bridge     string
+	DHCPRange  string
 }
 
 func stripCtlAndExtFromBytes(str string) string {
@@ -130,7 +134,7 @@ func generatemacaddr() (string, error) {
 	return oidprefix + ":" + b1 + ":" + b2 + ":" + b3, nil
 }
 
-func findtapdev() (string, error) {
+func (d *Driver) findtapdev() (string, error) {
 	lasttap := 0
 	numtaps := 0
 	nexttap := 0
@@ -160,7 +164,7 @@ func findtapdev() (string, error) {
 		return "", err
 	}
 
-	err = easyCmd("sudo", "ifconfig", "bridge0", "addm", nexttapname)
+	err = easyCmd("sudo", "ifconfig", d.Bridge, "addm", nexttapname)
 	if err != nil {
 		return "", err
 	}
@@ -330,36 +334,32 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
 			Name:   "bhyve-disk-size",
-			Usage:  "Size of disk for host in MB (default: 16384)",
+			Usage:  "Size of disk for host in MB (default: " + strconv.Itoa(defaultDiskSize) + ")",
 			Value:  defaultDiskSize,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_MEM_SIZE",
 			Name:   "bhyve-mem-size",
-			Usage:  "Size of memory for host in MB (default: 1024)",
+			Usage:  "Size of memory for host in MB (default: " + strconv.Itoa(defaultMemSize) + ")",
 			Value:  defaultMemSize,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_CPUS",
 			Name:   "bhyve-cpus",
-			Usage:  "Number of CPUs in VM (default: 1)",
+			Usage:  "Number of CPUs in VM (default: " + strconv.Itoa(defaultCPUCount) + ")",
 			Value:  defaultCPUCount,
 		},
-		mcnflag.IntFlag{
-			Name:   "bhyve-engine-port",
-			Usage:  "Docker engine port (default: 2376)",
-			Value:  engine.DefaultPort,
-			EnvVar: "BHYVE_ENGINE_PORT",
+		mcnflag.StringFlag{
+			Name:   "bhyve-bridge",
+			Usage:  "Name of bridge interface (default: " + defaultBridge + ")",
+			EnvVar: "BHYVE_BRIDGE",
+			Value:  defaultBridge,
 		},
 		mcnflag.StringFlag{
-			Name:   "bhyve-ip-address",
-			Usage:  "IP Address of machine (default: obtained via DHCP)",
-			EnvVar: "BHYVE_IP_ADDRESS",
-		},
-		mcnflag.StringFlag{
-			Name:   "bhyve-mac-address",
-			Usage:  "MAC Address of machine (default: generated)",
-			EnvVar: "BHYVE_IP_ADDRESS",
+			Name:   "bhyve-dhcp-range",
+			Usage:  "DHCP Range to use (default: " + defaultDHCPRange + ")",
+			EnvVar: "BHYVE_RANGE",
+			Value:  defaultDHCPRange,
 		},
 	}
 }
@@ -514,6 +514,32 @@ func (d *Driver) Kill() error {
 	return nil
 }
 
+func (d *Driver) writeDHCPConf(dhcpconffile string) error {
+	log.Debugf("Writing DHCP server config")
+
+	f, err := os.OpenFile(dhcpconffile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("port=0\ndomain-needed\nno-resolv\nexcept-interface=lo0\nbind-interfaces\nlocal-service\ndhcp-authoritative\n\n")
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("interface=" + d.Bridge + "\n")
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("dhcp-range=" + d.DHCPRange + "\n")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (d *Driver) StartDHCPServer() error {
 	log.Debugf("Starting DHCP Server")
 
@@ -522,8 +548,15 @@ func (d *Driver) StartDHCPServer() error {
 	dhcpconffile := filepath.Join(dhcpdir, "dnsmasq.conf")
 	dhcpleasefile := filepath.Join(dhcpdir, "bhyve.leases")
 
+	if !fileExists(dhcpconffile) {
+		err := d.writeDHCPConf(dhcpconffile)
+		if err != nil {
+			return err
+		}
+	}
+	// dnsmasq may leave it's PID file if killed?
 	if !fileExists(dhcppidfile) {
-		err := easyCmd("sudo", "dnsmasq", "-i", "bridge0", "-C", dhcpconffile, "-x", dhcppidfile, "-l", dhcpleasefile)
+		err := easyCmd("sudo", "dnsmasq", "-i", d.Bridge, "-C", dhcpconffile, "-x", dhcppidfile, "-l", dhcpleasefile)
 		if err != nil {
 			return err
 		}
@@ -587,17 +620,19 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("Setting mem size to %d", memsize)
 	d.MemSize = memsize
 
-	log.Debugf("Setting ip address to", flags.String("bhyve-ip-address"))
-	d.IPAddress = flags.String("bhyve-ip-address")
-
-	/*
-		log.Debugf("Setting MAC address to", flags.String("bhyve-mac-address"))
-	*/
 	mac, _ := generatemacaddr()
-	log.Debugf("Setting MAC address to", mac)
+	log.Debugf("Setting MAC address to %s", mac)
 	d.MACAddress = mac
 
 	d.SSHUser = "docker"
+
+	bridge := string(flags.String("bhyve-bridge"))
+	log.Debugf("Setting bridge to %s", bridge)
+	d.Bridge = bridge
+
+	dhcprange := string(flags.String("bhyve-dhcp-range"))
+	log.Debugf("Setting DHCP range to %s", dhcprange)
+	d.DHCPRange = dhcprange
 
 	return nil
 }
@@ -622,7 +657,7 @@ func (d *Driver) Start() error {
 
 	nmdmdev, err := findnmdmdev()
 	macaddr := d.MACAddress
-	tapdev, err := findtapdev()
+	tapdev, err := d.findtapdev()
 	d.NetDev = tapdev
 	cdpath, err := findcdpath()
 	cpucount := strconv.Itoa(int(d.CPUcount))
@@ -724,5 +759,7 @@ func NewDriver(hostName, storePath string) *Driver {
 		MemSize:    defaultMemSize,
 		CPUcount:   defaultCPUCount,
 		MACAddress: "",
+		Bridge:     defaultBridge,
+		DHCPRange:  defaultDHCPRange,
 	}
 }
