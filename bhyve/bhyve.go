@@ -46,6 +46,7 @@ type Driver struct {
 	MACAddress string
 	Bridge     string
 	DHCPRange  string
+	NMDMDev    string
 }
 
 func stripCtlAndExtFromBytes(str string) string {
@@ -656,6 +657,10 @@ func (d *Driver) Start() error {
 	}
 
 	nmdmdev, err := findnmdmdev()
+	if err != nil {
+		return err
+	}
+	d.NMDMDev = nmdmdev
 	macaddr := d.MACAddress
 	tapdev, err := d.findtapdev()
 	d.NetDev = tapdev
