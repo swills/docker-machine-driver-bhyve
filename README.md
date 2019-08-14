@@ -9,7 +9,7 @@ See also [this issue](https://github.com/machine-drivers/docker-machine-driver-x
 # How To Use It
 
 * Must have `sudo` installed and user running docker-machine must have password-less `sudo` access.
-* Interface `bridge0` must exist and must have a member with a DHCP server on the same network
+* `dnsmasq` must be installed
 
 ## One time setup
 
