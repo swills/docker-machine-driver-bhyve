@@ -201,6 +201,10 @@ func fileExists(filename string) bool {
 
 func (d *Driver) writeDeviceMap() error {
 	devmap := d.ResolveStorePath("/device.map")
+	cdpath, err := findcdpath()
+	if err != nil {
+		return err
+	}
 
 	f, err := os.Create(devmap)
 	if err != nil {
@@ -211,7 +215,7 @@ func (d *Driver) writeDeviceMap() error {
 	if err != nil {
 		return err
 	}
-	_, err = f.WriteString("(cd0) /usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso\n")
+	_, err = f.WriteString("(cd0) " + cdpath + "\n")
 	if err != nil {
 		return err
 	}
