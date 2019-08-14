@@ -6,5 +6,5 @@ import (
 )
 
 func main() {
-	plugin.RegisterDriver(new(bhyve.Driver))
+	plugin.RegisterDriver(bhyve.NewDriver("", ""))
 }

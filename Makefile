@@ -3,4 +3,4 @@ bin/docker-machine-driver-bhyve: main.go
 	go build -ldflags="-s -w" nmdm.go
 
 clean:
-	rm -f docker-machine-driver-bhyve
+	rm -f docker-machine-driver-bhyve nmdm

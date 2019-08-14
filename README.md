@@ -8,25 +8,27 @@ See also [this issue](https://github.com/machine-drivers/docker-machine-driver-x
 
 # How To Use It
 
-* Must have `sudo` installed and user running docker-machine must have password-less `sudo` access.
-* `dnsmasq` must be installed
-
 ## One time setup
 
-### Setup devfs
+* Install required packages:
+  * `sudo`
+  * `grub2-bhyve`
+  * `dnsmasq`
 
-Add user to wheel group, then add these lines to /etc/devfs.rules:
+* User running docker-machine must have password-less `sudo` access.
+
+* Add user to wheel group
+
+* Add these lines to /etc/devfs.rules:
 
 ```
 [system=10]
 add path 'nmdm*' mode 0660
 ```
 
-Set `devfs_system_ruleset="system"` in `/etc/rc.conf` and run `service devfs restart`
+* Set `devfs_system_ruleset="system"` in `/etc/rc.conf` and run `service devfs restart`
 
-### Setup bhyve
-
-Add `ng_ether`, `nmdm` and `vmm` to `kld_list` in `/etc/rc.conf`, `kldload ng_ether`, `kldload vmm`, `kldload nmdm`.
+* Add `ng_ether`, `nmdm` and `vmm` to `kld_list` in `/etc/rc.conf`, `kldload ng_ether`, `kldload vmm`, `kldload nmdm`.
 
 ## Build
 
@@ -63,7 +65,6 @@ docker run --rm hello-world
     * Docker port
     * `sudo` - may want to use `doas`
 * Avoid shelling out as much as possible
-* Fetch ISO
 * Manage processes (grub-bhyve, bhyve, serial logger)
 * Networking
     * Create VLAN
