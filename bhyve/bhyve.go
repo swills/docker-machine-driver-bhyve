@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"gitlab.mouf.net/swills/docker-machine-driver-bhyve/b2d"
 	"io"
 	"io/ioutil"
 	"net"
@@ -17,36 +18,42 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/engine"
 	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnflag"
+	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/state"
 )
 
 const (
-	defaultDiskSize  = 16384 // Mb
-	defaultMemSize   = 1024  // Mb
-	defaultCPUCount  = 1
-	defaultBridge    = "bridge0"
-	defaultDHCPRange = "192.168.8.10,192.168.8.254"
-	retrycount       = 16
-	sleeptime        = 100 // milliseconds
+	defaultDiskSize       = 16384 // Mb
+	defaultMemSize        = 1024  // Mb
+	defaultCPUCount       = 1
+	defaultBridge         = "bridge0"
+	defaultDHCPRange      = "192.168.8.10,192.168.8.254"
+	defaultBoot2DockerURL = ""
+	defaultISOFilename    = "boot2docker.iso"
+	retrycount            = 16
+	sleeptime             = 100 // milliseconds
+	isoFilename           = "boot2docker.iso"
 )
 
 type Driver struct {
 	*drivers.BaseDriver
-	EnginePort int
-	DiskSize   int64
-	MemSize    int64
-	CPUcount   int
-	NetDev     string
-	MACAddress string
-	Bridge     string
-	DHCPRange  string
-	NMDMDev    string
+	EnginePort     int
+	DiskSize       int64
+	MemSize        int64
+	CPUcount       int
+	NetDev         string
+	MACAddress     string
+	Bridge         string
+	DHCPRange      string
+	NMDMDev        string
+	Boot2DockerURL string
 }
 
 func stripCtlAndExtFromBytes(str string) string {
@@ -178,8 +185,121 @@ func (d *Driver) findtapdev() (string, error) {
 	return nexttapname, nil
 }
 
-func findcdpath() (string, error) {
-	return "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/boot2docker.iso", nil
+func (d *Driver) UpdateISOCache(isoURL string) error {
+	b2dinstance := b2d.NewB2dUtils(d.StorePath)
+	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
+
+	// recreate the cache dir if it has been manually deleted
+	if _, err := os.Stat(b2dinstance.ImgCachePath); os.IsNotExist(err) {
+		log.Infof("Image cache directory does not exist, creating it at %s...", b2dinstance.ImgCachePath)
+		if err := os.Mkdir(b2dinstance.ImgCachePath, 0700); err != nil {
+			return err
+		}
+	}
+
+	// Check owner of storage cache directory
+	cacheStat, _ := os.Stat(b2dinstance.ImgCachePath)
+
+	if int(cacheStat.Sys().(*syscall.Stat_t).Uid) == 0 {
+		log.Debugf("Fix %s directory permission...", cacheStat.Name())
+		err := os.Chown(b2dinstance.ImgCachePath, syscall.Getuid(), syscall.Getegid())
+		if err != nil {
+			return err
+		}
+	}
+
+	if isoURL != "" {
+		// Non-default B2D are not cached
+		log.Debugf("Not caching non-default B2D URL	")
+		return nil
+	}
+
+	exists := b2dinstance.Exists()
+	if !exists {
+		log.Info("No default Boot2Docker ISO found locally, downloading the latest release...")
+		return mcnutilsinstance.DownloadLatestBoot2Docker("")
+	}
+
+	latest := b2dinstance.IsLatest()
+	if !latest {
+		log.Info("Default Boot2Docker ISO is out-of-date, downloading the latest release...")
+		return mcnutilsinstance.DownloadLatestBoot2Docker("")
+	}
+
+	return nil
+}
+
+func (d *Driver) CopyIsoToMachineDir(isoURL, machineName string) error {
+	b2dinst := b2d.NewB2dUtils(d.StorePath)
+	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
+
+	if err := d.UpdateISOCache(isoURL); err != nil {
+		return err
+	}
+
+	isoPath := filepath.Join(b2dinst.ImgCachePath, isoFilename)
+	if isoStat, err := os.Stat(isoPath); err == nil {
+		if int(isoStat.Sys().(*syscall.Stat_t).Uid) == 0 {
+			log.Debugf("Fix %s file permission...", isoStat.Name())
+			err = os.Chown(isoPath, syscall.Getuid(), syscall.Getegid())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	machineDir := filepath.Join(d.StorePath, "machines", machineName)
+	machineIsoPath := filepath.Join(machineDir, isoFilename)
+
+	// By default just copy the existing "cached" iso to the machine's directory...
+	defaultISO := filepath.Join(b2dinst.ImgCachePath, defaultISOFilename)
+	if isoURL == "" {
+		log.Infof("Copying %s to %s...", defaultISO, machineIsoPath)
+		return CopyFile(defaultISO, machineIsoPath)
+	}
+
+	// if ISO is specified, check if it matches a github releases url or fallback to a direct download
+	downloadURL, err := b2dinst.GetReleaseURL(isoURL)
+	if err != nil {
+		return err
+	}
+
+	return mcnutilsinstance.DownloadISO(machineDir, b2dinst.Filename(), downloadURL)
+}
+
+func CopyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	defer out.Close()
+
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+
+	fi, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if err := os.Chmod(dst, fi.Mode()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *Driver) findcdpath() (string, error) {
+	return d.ResolveStorePath(isoFilename), nil
 }
 
 func (d *Driver) getBhyveVMName() (string, error) {
@@ -201,7 +321,7 @@ func fileExists(filename string) bool {
 
 func (d *Driver) writeDeviceMap() error {
 	devmap := d.ResolveStorePath("/device.map")
-	cdpath, err := findcdpath()
+	cdpath, err := d.findcdpath()
 	if err != nil {
 		return err
 	}
@@ -310,6 +430,10 @@ func getUsername() (string, error) {
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
+	if err := d.CopyIsoToMachineDir(d.Boot2DockerURL, d.MachineName); err != nil {
+		return err
+	}
+
 	vmpath := d.ResolveStorePath("guest.img")
 	log.Debugf("vmpath: %s", vmpath)
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
@@ -339,32 +463,37 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
 			Name:   "bhyve-disk-size",
-			Usage:  "Size of disk for host in MB (default: " + strconv.Itoa(defaultDiskSize) + ")",
+			Usage:  "Size of disk for host in MB",
 			Value:  defaultDiskSize,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_MEM_SIZE",
 			Name:   "bhyve-mem-size",
-			Usage:  "Size of memory for host in MB (default: " + strconv.Itoa(defaultMemSize) + ")",
+			Usage:  "Size of memory for host in MB",
 			Value:  defaultMemSize,
 		},
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_CPUS",
 			Name:   "bhyve-cpus",
-			Usage:  "Number of CPUs in VM (default: " + strconv.Itoa(defaultCPUCount) + ")",
+			Usage:  "Number of CPUs in VM",
 			Value:  defaultCPUCount,
 		},
 		mcnflag.StringFlag{
 			Name:   "bhyve-bridge",
-			Usage:  "Name of bridge interface (default: " + defaultBridge + ")",
+			Usage:  "Name of bridge interface",
 			EnvVar: "BHYVE_BRIDGE",
 			Value:  defaultBridge,
 		},
 		mcnflag.StringFlag{
 			Name:   "bhyve-dhcprange",
-			Usage:  "DHCP Range to use (default: " + defaultDHCPRange + ")",
+			Usage:  "DHCP Range to use",
 			EnvVar: "BHYVE_DHCPRANGE",
 			Value:  defaultDHCPRange,
+		},
+		mcnflag.StringFlag{
+			Name:   "bhyve-boot2docker-url",
+			Usage:  "URL for boot2docker.iso",
+			EnvVar: "BHYVE_BOOT2DOCKERURL",
 		},
 	}
 }
@@ -639,6 +768,8 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	log.Debugf("Setting DHCP range to %s", dhcprange)
 	d.DHCPRange = dhcprange
 
+	d.Boot2DockerURL = flags.String("bhyve-boot2docker-url")
+
 	return nil
 }
 
@@ -668,7 +799,7 @@ func (d *Driver) Start() error {
 	macaddr := d.MACAddress
 	tapdev, err := d.findtapdev()
 	d.NetDev = tapdev
-	cdpath, err := findcdpath()
+	cdpath, err := d.findcdpath()
 	cpucount := strconv.Itoa(int(d.CPUcount))
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
@@ -764,11 +895,12 @@ func NewDriver(hostName, storePath string) *Driver {
 			MachineName: hostName,
 			StorePath:   storePath,
 		},
-		DiskSize:   defaultDiskSize,
-		MemSize:    defaultMemSize,
-		CPUcount:   defaultCPUCount,
-		MACAddress: "",
-		Bridge:     defaultBridge,
-		DHCPRange:  defaultDHCPRange,
+		DiskSize:       defaultDiskSize,
+		MemSize:        defaultMemSize,
+		CPUcount:       defaultCPUCount,
+		MACAddress:     "",
+		Bridge:         defaultBridge,
+		DHCPRange:      defaultDHCPRange,
+		Boot2DockerURL: defaultBoot2DockerURL,
 	}
 }
