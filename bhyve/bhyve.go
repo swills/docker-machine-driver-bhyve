@@ -793,7 +793,10 @@ func (d *Driver) ensureIPForwardingEnabled() error {
 
 	if isenabled == 0 {
 		log.Debugf("IP forwarding not enabled, enabling")
-		easyCmd("sudo", "sysctl", "net.inet.ip.forwarding=1")
+		err = easyCmd("sudo", "sysctl", "net.inet.ip.forwarding=1")
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
