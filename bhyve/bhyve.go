@@ -146,11 +146,13 @@ func generatemacaddr() (string, error) {
 }
 
 func (d *Driver) findtapdev() (string, error) {
+	log.Debugf("findtapdev called")
 	lasttap := 0
 	numtaps := 0
 	nexttap := 0
 	ifaces, _ := net.Interfaces()
 	for _, iface := range ifaces {
+		log.Debugf("Checking interface %s", iface.Name)
 		match, _ := regexp.MatchString("^tap", iface.Name)
 		if match {
 			r := regexp.MustCompile(`tap(?P<num>\d*)`)
