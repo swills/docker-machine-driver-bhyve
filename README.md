@@ -60,8 +60,6 @@ docker run --rm hello-world
 * Remove reliance on external files
 * Remove reliance on external config
 * Remove hard coded stuff
-    * Paths
-    * Files
     * Docker port
     * `sudo` - may want to use `doas`
 * Avoid shelling out as much as possible

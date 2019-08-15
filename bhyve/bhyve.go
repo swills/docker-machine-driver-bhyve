@@ -1,12 +1,14 @@
 package bhyve
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/docker/machine/libmachine/ssh"
 	"io"
 	"io/ioutil"
 	"net"
@@ -404,21 +406,6 @@ func (d *Driver) runGrub() error {
 	return nil
 }
 
-func (d *Driver) CreateDiskImage(vmpath string) error {
-	err := easyCmd("truncate", "-s", strconv.Itoa(int(d.DiskSize)), vmpath)
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("dd", "if=/usr/home/swills/Documents/git/docker-machine-driver-bhyve/userdata.tar",
-		"of="+vmpath, "conv=notrunc", "status=none")
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func getUsername() (string, error) {
 	username, err := user.Current()
 	if err != nil {
@@ -426,6 +413,95 @@ func getUsername() (string, error) {
 	}
 
 	return username.Username, nil
+}
+
+func (d *Driver) publicSSHKeyPath() string {
+	return d.GetSSHKeyPath() + ".pub"
+}
+
+// Make a boot2docker userdata.tar key bundle
+func (d *Driver) generateKeyBundle() (*bytes.Buffer, error) {
+	magicString := "boot2docker, please format-me"
+
+	log.Infof("Creating SSH key...")
+	if err := ssh.GenerateSSHKey(d.GetSSHKeyPath()); err != nil {
+		return nil, err
+	}
+
+	buf := new(bytes.Buffer)
+	tw := tar.NewWriter(buf)
+
+	// magicString first so the automount script knows to format the disk
+	file := &tar.Header{Name: magicString, Size: int64(len(magicString))}
+	if err := tw.WriteHeader(file); err != nil {
+		return nil, err
+	}
+	if _, err := tw.Write([]byte(magicString)); err != nil {
+		return nil, err
+	}
+	// .ssh/key.pub => authorized_keys
+	file = &tar.Header{Name: ".ssh", Typeflag: tar.TypeDir, Mode: 0700}
+	if err := tw.WriteHeader(file); err != nil {
+		return nil, err
+	}
+	pubKey, err := ioutil.ReadFile(d.publicSSHKeyPath())
+	if err != nil {
+		return nil, err
+	}
+	file = &tar.Header{Name: ".ssh/authorized_keys", Size: int64(len(pubKey)), Mode: 0644}
+	if err := tw.WriteHeader(file); err != nil {
+		return nil, err
+	}
+	if _, err := tw.Write([]byte(pubKey)); err != nil {
+		return nil, err
+	}
+	file = &tar.Header{Name: ".ssh/authorized_keys2", Size: int64(len(pubKey)), Mode: 0644}
+	if err := tw.WriteHeader(file); err != nil {
+		return nil, err
+	}
+	if _, err := tw.Write([]byte(pubKey)); err != nil {
+		return nil, err
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func (d *Driver) generateRawDiskImage(diskPath string, size int64) error {
+	log.Debugf("generateRawDiskImage called")
+
+	f, err := os.OpenFile(diskPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return err
+	}
+	f.Close()
+
+	if err := os.Truncate(diskPath, d.DiskSize); err != nil {
+		return err
+	}
+
+	tarBuf, err := d.generateKeyBundle()
+	if err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(diskPath, os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	file.Seek(0, os.SEEK_SET)
+	_, err = file.Write(tarBuf.Bytes())
+	if err != nil {
+		return err
+	}
+	file.Close()
+
+	return nil
 }
 
 func (d *Driver) Create() error {
@@ -437,13 +513,19 @@ func (d *Driver) Create() error {
 
 	vmpath := d.ResolveStorePath("guest.img")
 	log.Debugf("vmpath: %s", vmpath)
+	if err := d.generateRawDiskImage(vmpath, d.DiskSize); err != nil {
+		return err
+	}
+
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
-	err := d.CreateDiskImage(vmpath)
-	if err != nil {
-		return err
-	}
+	/*
+		err := d.CreateDiskImage(vmpath)
+		if err != nil {
+			return err
+		}
+	*/
 
 	log.Infof("Starting %s...", d.MachineName)
 	if err := d.Start(); err != nil {
@@ -835,12 +917,6 @@ func (d *Driver) Start() error {
 		return err
 	}
 	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
-
-	err = easyCmd("cp", "/usr/home/swills/Documents/git/docker-machine-driver-bhyve/id_rsa",
-		d.ResolveStorePath("/id_rsa"))
-	if err != nil {
-		return err
-	}
 
 	if err := d.waitForIP(); err != nil {
 		return err
