@@ -522,13 +522,6 @@ func (d *Driver) Create() error {
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
-	/*
-		err := d.CreateDiskImage(vmpath)
-		if err != nil {
-			return err
-		}
-	*/
-
 	log.Infof("Starting %s...", d.MachineName)
 	if err := d.Start(); err != nil {
 		return err
