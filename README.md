@@ -46,24 +46,7 @@ export PATH=${PATH}:${PWD}
 ## Normal usage
 
 ```
-docker-machine kill default || :
-docker-machine rm -y default || :
-
 docker-machine create
 eval $(docker-machine env)
 docker run --rm hello-world
 ```
-
-
-### TODO
-
-* Remove reliance on external files
-* Remove reliance on external config
-* Remove hard coded stuff
-    * Docker port
-    * `sudo` - may want to use `doas`
-* Avoid shelling out as much as possible
-* Manage processes (grub-bhyve, bhyve, serial logger)
-* Networking
-    * Create VLAN
-    * Attach VLAN to bridge
