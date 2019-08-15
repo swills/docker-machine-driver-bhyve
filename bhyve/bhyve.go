@@ -781,10 +781,36 @@ func (d *Driver) StartDHCPServer() error {
 	return nil
 }
 
+func (d *Driver) ensureIPForwardingEnabled() error {
+	log.Debugf("Checking IP forwarding")
+	cmd := exec.Command("sysctl", "-n", "net.inet.ip.forwarding")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	isenabled, err := strconv.Atoi(strings.Trim(stdout.String(), "\n"))
+	if err != nil {
+		return err
+	}
+
+	if isenabled == 0 {
+		log.Debugf("IP forwarding not enabled, enabling")
+		easyCmd("sudo", "sysctl", "net.inet.ip.forwarding=1")
+	}
+	return nil
+}
+
 func (d *Driver) PreCreateCheck() error {
 	log.Debugf("preCreateCheck called")
 
-	err := d.StartDHCPServer()
+	err := d.ensureIPForwardingEnabled()
+	if err != nil {
+		return err
+	}
+	err = d.StartDHCPServer()
 	if err != nil {
 		return err
 	}
