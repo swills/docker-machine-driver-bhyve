@@ -58,8 +58,6 @@ type Driver struct {
 }
 
 func (d *Driver) setupnet() error {
-	log.Debugf("setupnet called")
-
 	localhost := "127.0.0.0/8"
 	_, localhostsubnet, _ := net.ParseCIDR(localhost)
 
@@ -147,7 +145,6 @@ func (d *Driver) setupnet() error {
 }
 
 func (d *Driver) findtapdev() (string, error) {
-	log.Debugf("findtapdev called")
 	lasttap := 0
 	numtaps := 0
 	nexttap := 0
@@ -286,8 +283,6 @@ func (d *Driver) publicSSHKeyPath() string {
 }
 
 func (d *Driver) Create() error {
-	log.Debugf("Create called")
-
 	if err := d.copyIsoToMachineDir(d.Boot2DockerURL, d.MachineName); err != nil {
 		return err
 	}
@@ -307,12 +302,10 @@ func (d *Driver) Create() error {
 }
 
 func (d *Driver) DriverName() string {
-	log.Debugf("DriverName called")
 	return "bhyve"
 }
 
 func (d *Driver) GetCreateFlags() []mcnflag.Flag {
-	log.Debugf("GetCreateFlags called")
 	return []mcnflag.Flag{
 		mcnflag.IntFlag{
 			EnvVar: "BHYVE_DISK_SIZE",
@@ -387,7 +380,6 @@ func (d *Driver) getIPfromDHCPLease() (string, error) {
 }
 
 func (d *Driver) GetIP() (string, error) {
-	log.Debugf("GetIP called")
 	s, err := d.GetState()
 	if err != nil {
 		log.Debugf("Couldn't get state")
@@ -408,13 +400,10 @@ func (d *Driver) GetIP() (string, error) {
 }
 
 func (d *Driver) GetSSHHostname() (string, error) {
-	log.Debugf("GetSSHHostname called")
 	return d.GetIP()
 }
 
 func (d *Driver) GetState() (state.State, error) {
-	log.Debugf("GetState called")
-
 	vmname, err := d.getBhyveVMName()
 	if err != nil {
 		return state.Stopped, nil
@@ -428,7 +417,6 @@ func (d *Driver) GetState() (state.State, error) {
 }
 
 func (d *Driver) GetURL() (string, error) {
-	log.Debugf("GetURL called")
 	ip, err := d.GetIP()
 	if err != nil {
 		return "", err
@@ -437,8 +425,6 @@ func (d *Driver) GetURL() (string, error) {
 }
 
 func (d *Driver) Kill() error {
-	log.Debugf("Kill called")
-
 	vmname, err := d.getBhyveVMName()
 	if err != nil {
 		return err
@@ -551,7 +537,6 @@ func (d *Driver) ensureIPForwardingEnabled() error {
 }
 
 func (d *Driver) PreCreateCheck() error {
-	log.Debugf("preCreateCheck called")
 
 	err := d.ensureIPForwardingEnabled()
 	if err != nil {
@@ -571,8 +556,6 @@ func (d *Driver) PreCreateCheck() error {
 }
 
 func (d *Driver) Remove() error {
-	log.Debugf("Remove called")
-
 	vmpath := d.ResolveStorePath(diskname)
 
 	err := os.RemoveAll(vmpath)
@@ -602,46 +585,21 @@ func (d *Driver) Restart() error {
 }
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
-	log.Debugf("SetConfigFromFlags called")
 
-	disksize := int64(flags.Int("bhyve-disk-size")) * 1024 * 1024
-	log.Debugf("Setting disk size to %d", disksize)
-	d.DiskSize = disksize
-
-	cpucount := int(flags.Int("bhyve-cpus"))
-	log.Debugf("Setting CPU count to %d", cpucount)
-	d.CPUcount = cpucount
-
-	memsize := int64(flags.Int("bhyve-mem-size"))
-	log.Debugf("Setting mem size to %d", memsize)
-	d.MemSize = memsize
-
-	mac, _ := generateMACAddress()
-	log.Debugf("Setting MAC address to %s", mac)
-	d.MACAddress = mac
-
+	d.DiskSize = int64(flags.Int("bhyve-disk-size")) * 1024 * 1024
+	d.CPUcount = int(flags.Int("bhyve-cpus"))
+	d.MemSize = int64(flags.Int("bhyve-mem-size"))
+	d.MACAddress = generateMACAddress()
 	d.SSHUser = "docker"
-
-	bridge := string(flags.String("bhyve-bridge"))
-	log.Debugf("Setting bridge to %s", bridge)
-	d.Bridge = bridge
-
-	subnet := string(flags.String("bhyve-subnet"))
-	log.Debugf("Setting subnet to %s", subnet)
-	d.Subnet = subnet
-
-	dhcprange := string(flags.String("bhyve-dhcprange"))
-	log.Debugf("Setting DHCP range to %s", dhcprange)
-	d.DHCPRange = dhcprange
-
+	d.Bridge = string(flags.String("bhyve-bridge"))
+	d.Subnet = string(flags.String("bhyve-subnet"))
+	d.DHCPRange = string(flags.String("bhyve-dhcprange"))
 	d.Boot2DockerURL = flags.String("bhyve-boot2docker-url")
 
 	return nil
 }
 
 func (d *Driver) Start() error {
-	log.Debugf("Start called")
-
 	vmpath := d.ResolveStorePath(diskname)
 	log.Debugf("vmpath: %s", vmpath)
 	// TODO Need to fix this to log bhyve output to this file
@@ -710,7 +668,6 @@ func (d *Driver) Start() error {
 }
 
 func (d *Driver) Stop() error {
-	log.Debugf("Stop called")
 	vmname, err := d.getBhyveVMName()
 	if err != nil {
 		return err
@@ -749,7 +706,6 @@ func (d *Driver) Stop() error {
 
 //noinspection GoUnusedExportedFunction
 func NewDriver(hostName, storePath string) *Driver {
-	log.Debugf("NewDriver called")
 	return &Driver{
 		EnginePort: engine.DefaultPort,
 		BaseDriver: &drivers.BaseDriver{

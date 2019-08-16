@@ -32,21 +32,12 @@ func getUsername() (string, error) {
 	return username.Username, nil
 }
 
-func generateMACAddress() (string, error) {
+func generateMACAddress() string {
 	oidprefix := "58:9c:fc"
-	b1, err := randomHex(1)
-	if err != nil {
-		return "", err
-	}
-	b2, err := randomHex(1)
-	if err != nil {
-		return "", err
-	}
-	b3, err := randomHex(1)
-	if err != nil {
-		return "", err
-	}
-	return oidprefix + ":" + b1 + ":" + b2 + ":" + b3, nil
+	b1, _ := randomHex(1)
+	b2, _ := randomHex(1)
+	b3, _ := randomHex(1)
+	return oidprefix + ":" + b1 + ":" + b2 + ":" + b3
 }
 
 func stripCtlAndExtFromBytes(str string) string {
