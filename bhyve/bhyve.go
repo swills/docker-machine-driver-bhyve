@@ -287,9 +287,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	vmpath := d.ResolveStorePath(diskname)
-	log.Debugf("vmpath: %s", vmpath)
-	if err := d.generateRawDiskImage(vmpath, d.DiskSize); err != nil {
+	if err := d.generateRawDiskImage(d.ResolveStorePath(diskname), d.DiskSize); err != nil {
 		return err
 	}
 
@@ -556,9 +554,7 @@ func (d *Driver) PreCreateCheck() error {
 }
 
 func (d *Driver) Remove() error {
-	vmpath := d.ResolveStorePath(diskname)
-
-	err := os.RemoveAll(vmpath)
+	err := os.RemoveAll(d.ResolveStorePath(diskname))
 	if err != nil {
 		return err
 	}
@@ -600,8 +596,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 }
 
 func (d *Driver) Start() error {
-	vmpath := d.ResolveStorePath(diskname)
-	log.Debugf("vmpath: %s", vmpath)
 	// TODO Need to fix this to log bhyve output to this file
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
@@ -641,7 +635,7 @@ func (d *Driver) Start() error {
 
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
 		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
-			vmpath, "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev+"A", "-c", cpucount, "-m", ram+"M",
+			d.ResolveStorePath(diskname), "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev+"A", "-c", cpucount, "-m", ram+"M",
 		vmname)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
