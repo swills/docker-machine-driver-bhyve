@@ -521,7 +521,7 @@ func (d *Driver) Remove() error {
 		return err
 	}
 
-	err = os.RemoveAll(d.ResolveStorePath(diskname))
+	err = os.RemoveAll(d.ResolveStorePath("."))
 	if err != nil {
 		return err
 	}
