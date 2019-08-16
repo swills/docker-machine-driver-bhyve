@@ -13,9 +13,11 @@ import (
 	"github.com/docker/machine/libmachine/log"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -334,4 +336,48 @@ func startDHCPServer(dhcpdir string, bridge string, dhcprange string) error {
 		}
 	}
 	return nil
+}
+
+func findtapdev(bridge string) (string, error) {
+	lasttap := 0
+	numtaps := 0
+	nexttap := 0
+	ifaces, _ := net.Interfaces()
+	for _, iface := range ifaces {
+		log.Debugf("Checking interface %s", iface.Name)
+		match, _ := regexp.MatchString("^tap", iface.Name)
+		if match {
+			r := regexp.MustCompile(`tap(?P<num>\d*)`)
+			res := r.FindAllStringSubmatch(iface.Name, -1)
+			tapnum, err := strconv.Atoi(res[0][1])
+			if err != nil {
+			}
+			if tapnum > lasttap {
+				lasttap = tapnum
+			}
+			numtaps = numtaps + 1
+		}
+	}
+	if numtaps > 0 {
+		nexttap = lasttap + 1
+	}
+	log.Debugf("nexttap: %d", nexttap)
+
+	nexttapname := "tap" + strconv.Itoa(nexttap)
+	err := easyCmd("sudo", "ifconfig", nexttapname, "create")
+	if err != nil {
+		return "", err
+	}
+
+	err = easyCmd("sudo", "ifconfig", bridge, "addm", nexttapname)
+	if err != nil {
+		return "", err
+	}
+
+	err = easyCmd("sudo", "ifconfig", nexttapname, "up")
+	if err != nil {
+		return "", err
+	}
+
+	return nexttapname, nil
 }

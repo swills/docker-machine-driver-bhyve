@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -140,50 +139,6 @@ func (d *Driver) setupnet() error {
 
 	// sudo ngctl msg igb0_NAT: redirectport '{alias_addr=10.0.1.8 alias_port=12377 local_addr=192.168.8.73 local_port=2376 proto=6}'
 	return nil
-}
-
-func (d *Driver) findtapdev() (string, error) {
-	lasttap := 0
-	numtaps := 0
-	nexttap := 0
-	ifaces, _ := net.Interfaces()
-	for _, iface := range ifaces {
-		log.Debugf("Checking interface %s", iface.Name)
-		match, _ := regexp.MatchString("^tap", iface.Name)
-		if match {
-			r := regexp.MustCompile(`tap(?P<num>\d*)`)
-			res := r.FindAllStringSubmatch(iface.Name, -1)
-			tapnum, err := strconv.Atoi(res[0][1])
-			if err != nil {
-			}
-			if tapnum > lasttap {
-				lasttap = tapnum
-			}
-			numtaps = numtaps + 1
-		}
-	}
-	if numtaps > 0 {
-		nexttap = lasttap + 1
-	}
-	log.Debugf("nexttap: %d", nexttap)
-
-	nexttapname := "tap" + strconv.Itoa(nexttap)
-	err := easyCmd("sudo", "ifconfig", nexttapname, "create")
-	if err != nil {
-		return "", err
-	}
-
-	err = easyCmd("sudo", "ifconfig", d.Bridge, "addm", nexttapname)
-	if err != nil {
-		return "", err
-	}
-
-	err = easyCmd("sudo", "ifconfig", nexttapname, "up")
-	if err != nil {
-		return "", err
-	}
-
-	return nexttapname, nil
 }
 
 func (d *Driver) getBhyveVMName() (string, error) {
@@ -455,7 +410,7 @@ func (d *Driver) Start() error {
 	}
 	d.NMDMDev = nmdmdev
 	macaddr := d.MACAddress
-	tapdev, err := d.findtapdev()
+	tapdev, err := findtapdev(d.Bridge)
 	d.NetDev = tapdev
 	cdpath := d.ResolveStorePath(isoFilename)
 	cpucount := strconv.Itoa(int(d.CPUcount))
