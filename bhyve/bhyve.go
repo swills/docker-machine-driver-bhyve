@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/engine"
@@ -196,56 +194,6 @@ func (d *Driver) getBhyveVMName() (string, error) {
 	}
 
 	return "docker-machine-" + username.Username + "-" + d.MachineName, nil
-}
-
-func (d *Driver) runGrub() error {
-	err := writeDeviceMap(d.ResolveStorePath("/device.map"), d.ResolveStorePath(isoFilename), d.ResolveStorePath(diskname))
-	if err != nil {
-		return err
-	}
-
-	vmname, err := d.getBhyveVMName()
-	if err != nil {
-		return err
-	}
-
-	for maxtries := 0; maxtries < retrycount; maxtries++ {
-		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", d.ResolveStorePath("device.map"), "-r", "cd0", "-M",
-			strconv.Itoa(int(d.MemSize))+"M", vmname)
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return err
-		}
-
-		go func() {
-			_, err = io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
-			if err != nil {
-				return
-			}
-			_, err = io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
-			if err != nil {
-				return
-			}
-			_, err = io.WriteString(stdin, "boot\n")
-			if err != nil {
-				return
-			}
-			err = stdin.Close()
-			if err != nil {
-				return
-			}
-		}()
-
-		out, err := cmd.CombinedOutput()
-		log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
-		if strings.Contains(string(out), "GNU GRUB") {
-			log.Debugf("grub-bhyve: looks OK")
-			return nil
-		}
-		time.Sleep(sleeptime * time.Millisecond)
-	}
-
-	return nil
 }
 
 func (d *Driver) publicSSHKeyPath() string {
@@ -541,7 +489,12 @@ func (d *Driver) Start() error {
 		return err
 	}
 
-	err = d.runGrub()
+	err = writeDeviceMap(d.ResolveStorePath("/device.map"), d.ResolveStorePath(isoFilename), d.ResolveStorePath(diskname))
+	if err != nil {
+		return err
+	}
+
+	err = runGrub(d.ResolveStorePath("/device.map"), strconv.Itoa(int(d.MemSize)), vmname)
 	if err != nil {
 		return err
 	}

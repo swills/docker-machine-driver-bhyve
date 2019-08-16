@@ -245,3 +245,43 @@ func writeDeviceMap(devmap string, cdpath string, diskname string) error {
 
 	return nil
 }
+
+func runGrub(devmap string, memsize string, vmname string) error {
+	for maxtries := 0; maxtries < retrycount; maxtries++ {
+		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", devmap, "-r", "cd0", "-M",
+			memsize+"M", vmname)
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return err
+		}
+
+		go func() {
+			_, err = io.WriteString(stdin, "linux (cd0)/boot/vmlinuz waitusb=5:LABEL=boot2docker-data base norestore noembed\n")
+			if err != nil {
+				return
+			}
+			_, err = io.WriteString(stdin, "initrd (cd0)/boot/initrd.img\n")
+			if err != nil {
+				return
+			}
+			_, err = io.WriteString(stdin, "boot\n")
+			if err != nil {
+				return
+			}
+			err = stdin.Close()
+			if err != nil {
+				return
+			}
+		}()
+
+		out, err := cmd.CombinedOutput()
+		log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
+		if strings.Contains(string(out), "GNU GRUB") {
+			log.Debugf("grub-bhyve: looks OK")
+			return nil
+		}
+		time.Sleep(sleeptime * time.Millisecond)
+	}
+
+	return nil
+}
