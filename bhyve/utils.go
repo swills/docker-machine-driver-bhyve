@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -283,5 +284,54 @@ func runGrub(devmap string, memsize string, vmname string) error {
 		time.Sleep(sleeptime * time.Millisecond)
 	}
 
+	return nil
+}
+
+func writeDHCPConf(dhcpconffile string, bridge string, dhcprange string) error {
+	log.Debugf("Writing DHCP server config")
+
+	f, err := os.OpenFile(dhcpconffile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("port=0\ndomain-needed\nno-resolv\nexcept-interface=lo0\nbind-interfaces\nlocal-service\ndhcp-authoritative\n\n")
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("interface=" + bridge + "\n")
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("dhcp-range=" + dhcprange + "\n")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func startDHCPServer(dhcpdir string, bridge string, dhcprange string) error {
+	log.Debugf("Starting DHCP Server")
+
+	dhcppidfile := filepath.Join(dhcpdir, "dnsmasq.pid")
+	dhcpconffile := filepath.Join(dhcpdir, "dnsmasq.conf")
+	dhcpleasefile := filepath.Join(dhcpdir, "bhyve.leases")
+
+	if !fileExists(dhcpconffile) {
+		err := writeDHCPConf(dhcpconffile, bridge, dhcprange)
+		if err != nil {
+			return err
+		}
+	}
+	// dnsmasq may leave it's PID file if killed?
+	if !fileExists(dhcppidfile) {
+		err := easyCmd("sudo", "dnsmasq", "-i", bridge, "-C", dhcpconffile, "-x", dhcppidfile, "-l", dhcpleasefile)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

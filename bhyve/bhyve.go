@@ -363,56 +363,6 @@ func (d *Driver) Kill() error {
 	return nil
 }
 
-func (d *Driver) writeDHCPConf(dhcpconffile string) error {
-	log.Debugf("Writing DHCP server config")
-
-	f, err := os.OpenFile(dhcpconffile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-
-	_, err = f.WriteString("port=0\ndomain-needed\nno-resolv\nexcept-interface=lo0\nbind-interfaces\nlocal-service\ndhcp-authoritative\n\n")
-	if err != nil {
-		return err
-	}
-
-	_, err = f.WriteString("interface=" + d.Bridge + "\n")
-	if err != nil {
-		return err
-	}
-
-	_, err = f.WriteString("dhcp-range=" + d.DHCPRange + "\n")
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (d *Driver) startDHCPServer() error {
-	log.Debugf("Starting DHCP Server")
-
-	dhcpdir := d.StorePath
-	dhcppidfile := filepath.Join(dhcpdir, "dnsmasq.pid")
-	dhcpconffile := filepath.Join(dhcpdir, "dnsmasq.conf")
-	dhcpleasefile := filepath.Join(dhcpdir, "bhyve.leases")
-
-	if !fileExists(dhcpconffile) {
-		err := d.writeDHCPConf(dhcpconffile)
-		if err != nil {
-			return err
-		}
-	}
-	// dnsmasq may leave it's PID file if killed?
-	if !fileExists(dhcppidfile) {
-		err := easyCmd("sudo", "dnsmasq", "-i", d.Bridge, "-C", dhcpconffile, "-x", dhcppidfile, "-l", dhcpleasefile)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (d *Driver) PreCreateCheck() error {
 
 	err := ensureIPForwardingEnabled()
@@ -425,7 +375,7 @@ func (d *Driver) PreCreateCheck() error {
 		return err
 	}
 
-	err = d.startDHCPServer()
+	err = startDHCPServer(d.StorePath, d.Bridge, d.DHCPRange)
 	if err != nil {
 		return err
 	}
