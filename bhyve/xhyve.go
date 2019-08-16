@@ -20,9 +20,9 @@ import (
 	"time"
 )
 
-func (d *Driver) updateISOCache(isoURL string) error {
-	b2dinstance := b2d.NewB2dUtils(d.StorePath)
-	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
+func updateISOCache(storepath string, isoURL string) error {
+	b2dinstance := b2d.NewB2dUtils(storepath)
+	mcnutilsinstance := mcnutils.NewB2dUtils(storepath)
 
 	// recreate the cache dir if it has been manually deleted
 	if _, err := os.Stat(b2dinstance.ImgCachePath); os.IsNotExist(err) {
@@ -68,7 +68,7 @@ func (d *Driver) copyIsoToMachineDir(isoURL, machineName string) error {
 	b2dinst := b2d.NewB2dUtils(d.StorePath)
 	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
 
-	if err := d.updateISOCache(isoURL); err != nil {
+	if err := d.updateISOCache(d.StorePath, isoURL); err != nil {
 		return err
 	}
 
