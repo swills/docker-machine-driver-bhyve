@@ -1,12 +1,14 @@
+// Copyright 2019 Steve Wills. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package bhyve
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/docker/machine/libmachine/ssh"
 	"io"
 	"io/ioutil"
 	"net"
@@ -16,16 +18,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
-
-	"gitlab.mouf.net/swills/docker-machine-driver-bhyve/b2d"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/engine"
 	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnflag"
-	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/state"
 )
 
@@ -41,6 +39,7 @@ const (
 	retrycount            = 16
 	sleeptime             = 100 // milliseconds
 	isoFilename           = "boot2docker.iso"
+	diskname              = "guest.img"
 )
 
 type Driver struct {
@@ -192,92 +191,6 @@ func (d *Driver) findtapdev() (string, error) {
 	return nexttapname, nil
 }
 
-func (d *Driver) UpdateISOCache(isoURL string) error {
-	b2dinstance := b2d.NewB2dUtils(d.StorePath)
-	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
-
-	// recreate the cache dir if it has been manually deleted
-	if _, err := os.Stat(b2dinstance.ImgCachePath); os.IsNotExist(err) {
-		log.Infof("Image cache directory does not exist, creating it at %s...", b2dinstance.ImgCachePath)
-		if err := os.Mkdir(b2dinstance.ImgCachePath, 0700); err != nil {
-			return err
-		}
-	}
-
-	// Check owner of storage cache directory
-	cacheStat, _ := os.Stat(b2dinstance.ImgCachePath)
-
-	if int(cacheStat.Sys().(*syscall.Stat_t).Uid) == 0 {
-		log.Debugf("Fix %s directory permission...", cacheStat.Name())
-		err := os.Chown(b2dinstance.ImgCachePath, syscall.Getuid(), syscall.Getegid())
-		if err != nil {
-			return err
-		}
-	}
-
-	if isoURL != "" {
-		// Non-default B2D are not cached
-		log.Debugf("Not caching non-default B2D URL	")
-		return nil
-	}
-
-	exists := b2dinstance.Exists()
-	if !exists {
-		log.Info("No default Boot2Docker ISO found locally, downloading the latest release...")
-		return mcnutilsinstance.DownloadLatestBoot2Docker("")
-	}
-
-	latest := b2dinstance.IsLatest()
-	if !latest {
-		log.Info("Default Boot2Docker ISO is out-of-date, downloading the latest release...")
-		return mcnutilsinstance.DownloadLatestBoot2Docker("")
-	}
-
-	return nil
-}
-
-func (d *Driver) CopyIsoToMachineDir(isoURL, machineName string) error {
-	b2dinst := b2d.NewB2dUtils(d.StorePath)
-	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
-
-	if err := d.UpdateISOCache(isoURL); err != nil {
-		return err
-	}
-
-	isoPath := filepath.Join(b2dinst.ImgCachePath, isoFilename)
-	if isoStat, err := os.Stat(isoPath); err == nil {
-		if int(isoStat.Sys().(*syscall.Stat_t).Uid) == 0 {
-			log.Debugf("Fix %s file permission...", isoStat.Name())
-			err = os.Chown(isoPath, syscall.Getuid(), syscall.Getegid())
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	machineDir := filepath.Join(d.StorePath, "machines", machineName)
-	machineIsoPath := filepath.Join(machineDir, isoFilename)
-
-	// By default just copy the existing "cached" iso to the machine's directory...
-	defaultISO := filepath.Join(b2dinst.ImgCachePath, defaultISOFilename)
-	if isoURL == "" {
-		log.Infof("Copying %s to %s...", defaultISO, machineIsoPath)
-		return copyFile(defaultISO, machineIsoPath)
-	}
-
-	// if ISO is specified, check if it matches a github releases url or fallback to a direct download
-	downloadURL, err := b2dinst.GetReleaseURL(isoURL)
-	if err != nil {
-		return err
-	}
-
-	return mcnutilsinstance.DownloadISO(machineDir, b2dinst.Filename(), downloadURL)
-}
-
-func (d *Driver) findcdpath() (string, error) {
-	return d.ResolveStorePath(isoFilename), nil
-}
-
 func (d *Driver) getBhyveVMName() (string, error) {
 	username, err := getUsername()
 	if err != nil {
@@ -289,17 +202,14 @@ func (d *Driver) getBhyveVMName() (string, error) {
 
 func (d *Driver) writeDeviceMap() error {
 	devmap := d.ResolveStorePath("/device.map")
-	cdpath, err := d.findcdpath()
-	if err != nil {
-		return err
-	}
+	cdpath := d.ResolveStorePath(isoFilename)
 
 	f, err := os.Create(devmap)
 	if err != nil {
 		return err
 	}
 
-	_, err = f.WriteString("(hd0) " + d.ResolveStorePath("guest.img") + "\n")
+	_, err = f.WriteString("(hd0) " + d.ResolveStorePath(diskname) + "\n")
 	if err != nil {
 		return err
 	}
@@ -375,106 +285,18 @@ func (d *Driver) publicSSHKeyPath() string {
 	return d.GetSSHKeyPath() + ".pub"
 }
 
-// Make a boot2docker userdata.tar key bundle
-func (d *Driver) generateKeyBundle() (*bytes.Buffer, error) {
-	magicString := "boot2docker, please format-me"
-
-	log.Infof("Creating SSH key...")
-	if err := ssh.GenerateSSHKey(d.GetSSHKeyPath()); err != nil {
-		return nil, err
-	}
-
-	buf := new(bytes.Buffer)
-	tw := tar.NewWriter(buf)
-
-	// magicString first so the automount script knows to format the disk
-	file := &tar.Header{Name: magicString, Size: int64(len(magicString))}
-	if err := tw.WriteHeader(file); err != nil {
-		return nil, err
-	}
-	if _, err := tw.Write([]byte(magicString)); err != nil {
-		return nil, err
-	}
-	// .ssh/key.pub => authorized_keys
-	file = &tar.Header{Name: ".ssh", Typeflag: tar.TypeDir, Mode: 0700}
-	if err := tw.WriteHeader(file); err != nil {
-		return nil, err
-	}
-	pubKey, err := ioutil.ReadFile(d.publicSSHKeyPath())
-	if err != nil {
-		return nil, err
-	}
-	file = &tar.Header{Name: ".ssh/authorized_keys", Size: int64(len(pubKey)), Mode: 0644}
-	if err := tw.WriteHeader(file); err != nil {
-		return nil, err
-	}
-	if _, err := tw.Write([]byte(pubKey)); err != nil {
-		return nil, err
-	}
-	file = &tar.Header{Name: ".ssh/authorized_keys2", Size: int64(len(pubKey)), Mode: 0644}
-	if err := tw.WriteHeader(file); err != nil {
-		return nil, err
-	}
-	if _, err := tw.Write([]byte(pubKey)); err != nil {
-		return nil, err
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
-
-func (d *Driver) generateRawDiskImage(diskPath string, size int64) error {
-	log.Debugf("generateRawDiskImage called")
-
-	f, err := os.OpenFile(diskPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
-	if err != nil {
-		if os.IsExist(err) {
-			return nil
-		}
-		return err
-	}
-	f.Close()
-
-	if err := os.Truncate(diskPath, d.DiskSize); err != nil {
-		return err
-	}
-
-	tarBuf, err := d.generateKeyBundle()
-	if err != nil {
-		return err
-	}
-
-	file, err := os.OpenFile(diskPath, os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	file.Seek(0, os.SEEK_SET)
-	_, err = file.Write(tarBuf.Bytes())
-	if err != nil {
-		return err
-	}
-	file.Close()
-
-	return nil
-}
-
 func (d *Driver) Create() error {
 	log.Debugf("Create called")
 
-	if err := d.CopyIsoToMachineDir(d.Boot2DockerURL, d.MachineName); err != nil {
+	if err := d.copyIsoToMachineDir(d.Boot2DockerURL, d.MachineName); err != nil {
 		return err
 	}
 
-	vmpath := d.ResolveStorePath("guest.img")
+	vmpath := d.ResolveStorePath(diskname)
 	log.Debugf("vmpath: %s", vmpath)
 	if err := d.generateRawDiskImage(vmpath, d.DiskSize); err != nil {
 		return err
 	}
-
-	bhyvelogpath := d.ResolveStorePath("bhyve.log")
-	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
 	log.Infof("Starting %s...", d.MachineName)
 	if err := d.Start(); err != nil {
@@ -562,39 +384,6 @@ func (d *Driver) getIPfromDHCPLease() (string, error) {
 	}
 
 	return "", errors.New("IP Not Found")
-}
-
-func (d *Driver) waitForIP() error {
-	var ip string
-	var err error
-
-	log.Infof("Waiting for VM to come online...")
-	for i := 1; i <= 60; i++ {
-		ip, err = d.getIPfromDHCPLease()
-		if err != nil {
-			log.Debugf("Not there yet %d/%d, error: %s", i, 60, err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-
-		if ip != "" {
-			log.Debugf("Got an ip: %s", ip)
-			d.IPAddress = ip
-
-			break
-		}
-	}
-
-	if ip == "" {
-		return fmt.Errorf("machine didn't return an IP after 120 seconds, aborting")
-	}
-
-	// Wait for SSH over NAT to be available before returning to user
-	if err := drivers.WaitForSSH(d); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (d *Driver) GetIP() (string, error) {
@@ -712,7 +501,7 @@ func (d *Driver) writeDHCPConf(dhcpconffile string) error {
 	return nil
 }
 
-func (d *Driver) StartDHCPServer() error {
+func (d *Driver) startDHCPServer() error {
 	log.Debugf("Starting DHCP Server")
 
 	dhcpdir := d.StorePath
@@ -774,7 +563,7 @@ func (d *Driver) PreCreateCheck() error {
 		return err
 	}
 
-	err = d.StartDHCPServer()
+	err = d.startDHCPServer()
 	if err != nil {
 		return err
 	}
@@ -784,7 +573,7 @@ func (d *Driver) PreCreateCheck() error {
 func (d *Driver) Remove() error {
 	log.Debugf("Remove called")
 
-	vmpath := d.ResolveStorePath("guest.img")
+	vmpath := d.ResolveStorePath(diskname)
 
 	err := os.RemoveAll(vmpath)
 	if err != nil {
@@ -853,8 +642,9 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 func (d *Driver) Start() error {
 	log.Debugf("Start called")
 
-	vmpath := d.ResolveStorePath("guest.img")
+	vmpath := d.ResolveStorePath(diskname)
 	log.Debugf("vmpath: %s", vmpath)
+	// TODO Need to fix this to log bhyve output to this file
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
@@ -876,7 +666,7 @@ func (d *Driver) Start() error {
 	macaddr := d.MACAddress
 	tapdev, err := d.findtapdev()
 	d.NetDev = tapdev
-	cdpath, err := d.findcdpath()
+	cdpath := d.ResolveStorePath(isoFilename)
 	cpucount := strconv.Itoa(int(d.CPUcount))
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
