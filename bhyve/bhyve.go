@@ -33,6 +33,7 @@ const (
 	sleeptime             = 100 // milliseconds
 	isoFilename           = "boot2docker.iso"
 	diskname              = "guest.img"
+	defaultBhyveVMName    = ""
 )
 
 type Driver struct {
@@ -48,16 +49,7 @@ type Driver struct {
 	NMDMDev        string
 	Boot2DockerURL string
 	Subnet         string
-}
-
-func (d *Driver) getBhyveVMName() (string, error) {
-
-	username, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-
-	return "docker-machine-" + username.Username + "-" + d.MachineName, nil
+	BhyveVMName    string
 }
 
 func (d *Driver) Create() error {
@@ -157,12 +149,7 @@ func (d *Driver) GetSSHHostname() (string, error) {
 }
 
 func (d *Driver) GetState() (state.State, error) {
-	vmname, err := d.getBhyveVMName()
-	if err != nil {
-		return state.Stopped, nil
-	}
-
-	if fileExists("/dev/vmm/" + vmname) {
+	if fileExists("/dev/vmm/" + d.BhyveVMName) {
 		log.Debugf("STATE: running")
 		return state.Running, nil
 	}
@@ -178,12 +165,7 @@ func (d *Driver) GetURL() (string, error) {
 }
 
 func (d *Driver) Kill() error {
-	vmname, err := d.getBhyveVMName()
-	if err != nil {
-		return err
-	}
-
-	if err := destroyVM(vmname); err != nil {
+	if err := destroyVM(d.BhyveVMName); err != nil {
 		return err
 	}
 
@@ -202,7 +184,14 @@ func (d *Driver) Kill() error {
 
 func (d *Driver) PreCreateCheck() error {
 
-	err := ensureIPForwardingEnabled()
+	username, err := user.Current()
+	if err != nil {
+		return err
+	}
+
+	d.BhyveVMName = "docker-machine-" + username.Username + "-" + d.MachineName
+
+	err = ensureIPForwardingEnabled()
 	if err != nil {
 		return err
 	}
@@ -267,17 +256,12 @@ func (d *Driver) Start() error {
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
-	vmname, err := d.getBhyveVMName()
+	err := writeDeviceMap(d.ResolveStorePath("/device.map"), d.ResolveStorePath(isoFilename), d.ResolveStorePath(diskname))
 	if err != nil {
 		return err
 	}
 
-	err = writeDeviceMap(d.ResolveStorePath("/device.map"), d.ResolveStorePath(isoFilename), d.ResolveStorePath(diskname))
-	if err != nil {
-		return err
-	}
-
-	err = runGrub(d.ResolveStorePath("/device.map"), strconv.Itoa(int(d.MemSize)), vmname)
+	err = runGrub(d.ResolveStorePath("/device.map"), strconv.Itoa(int(d.MemSize)), d.BhyveVMName)
 	if err != nil {
 		return err
 	}
@@ -306,7 +290,7 @@ func (d *Driver) Start() error {
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
 		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+d.MACAddress, "-s", "3:0,virtio-blk,"+
 			d.ResolveStorePath(diskname), "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev+"A", "-c", cpucount, "-m", ram+"M",
-		vmname)
+		d.BhyveVMName)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
@@ -363,5 +347,6 @@ func NewDriver(hostName, storePath string) *Driver {
 		DHCPRange:      defaultDHCPRange,
 		Boot2DockerURL: defaultBoot2DockerURL,
 		Subnet:         defaultSubnet,
+		BhyveVMName:    defaultBhyveVMName,
 	}
 }
