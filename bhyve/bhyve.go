@@ -7,7 +7,6 @@ package bhyve
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -49,93 +48,6 @@ type Driver struct {
 	NMDMDev        string
 	Boot2DockerURL string
 	Subnet         string
-}
-
-func (d *Driver) setupnet() error {
-	localhost := "127.0.0.0/8"
-	_, localhostsubnet, _ := net.ParseCIDR(localhost)
-
-	_, oursubnet, _ := net.ParseCIDR(d.Subnet)
-
-	ifaces, _ := net.Interfaces()
-	for _, iface := range ifaces {
-		log.Debugf("Checking interface %s", iface.Name)
-
-		if iface.Name == d.Bridge {
-			log.Debugf("Interface %s exists, assuming network setup properly", d.Bridge)
-			return nil
-		}
-	}
-
-	found := false
-	useip := net.IP{}
-	useiface := net.Interface{}
-	for _, iface := range ifaces {
-		if found {
-			break
-		}
-
-		addrs, _ := iface.Addrs()
-		for _, addr := range addrs {
-			ipAddr, _, err := net.ParseCIDR(addr.String())
-			if err != nil {
-				log.Debugf("Failed to parse address %s", addr.String())
-				continue
-			}
-			theip := net.IP.To4(ipAddr)
-			if theip == nil {
-				continue
-			}
-			if !localhostsubnet.Contains(theip) && !oursubnet.Contains(theip) {
-				log.Debugf("Interface %s has address %s and looks like a good candidate", iface.Name, theip.String())
-				found = true
-				useip = theip
-				useiface = iface
-			}
-		}
-	}
-
-	log.Debugf("Setting up %s on %s, aliased to %s on %s", d.Subnet, d.Bridge, useip, useiface.Name)
-
-	err := easyCmd("sudo", "ifconfig", d.Bridge, "create")
-	if err != nil {
-		return err
-	}
-	err = easyCmd("sudo", "ifconfig", d.Bridge, d.Subnet)
-	if err != nil {
-		return err
-	}
-	err = easyCmd("sudo", "ifconfig", d.Bridge, "up")
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("sudo", "ngctl", "mkpeer", useiface.Name+":", "nat", "lower", "in")
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("sudo", "ngctl", "name", useiface.Name+":lower", useiface.Name+"_NAT")
-	if err != nil {
-		return err
-	}
-	err = easyCmd("sudo", "ngctl", "connect", useiface.Name+":", useiface.Name+"_NAT:", "upper", "out")
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("sudo", "ngctl", "msg", useiface.Name+"_NAT:", "setdlt", "1")
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("sudo", "ngctl", "msg", useiface.Name+"_NAT:", "setaliasaddr", useip.String())
-	if err != nil {
-		return err
-	}
-
-	// sudo ngctl msg igb0_NAT: redirectport '{alias_addr=10.0.1.8 alias_port=12377 local_addr=192.168.8.73 local_port=2376 proto=6}'
-	return nil
 }
 
 func (d *Driver) getBhyveVMName() (string, error) {
@@ -299,7 +211,7 @@ func (d *Driver) PreCreateCheck() error {
 		return err
 	}
 
-	err = d.setupnet()
+	err = setupnet(d.Bridge, d.Subnet)
 	if err != nil {
 		return err
 	}
@@ -391,12 +303,7 @@ func (d *Driver) Start() error {
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
 
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-		return err
-	}
-
-	err = easyCmd("/usr/sbin/daemon", "-f", "-p", d.ResolveStorePath("nmdm.pid"), dir+"/nmdm", nmdmdev+"B", d.ResolveStorePath("console.log"))
+	err = startConsoleLogger(d.StorePath, nmdmdev)
 	if err != nil {
 		return err
 	}
