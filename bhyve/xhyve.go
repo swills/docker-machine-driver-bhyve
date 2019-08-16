@@ -90,7 +90,8 @@ func (d *Driver) copyIsoToMachineDir(isoURL, machineName string) error {
 	defaultISO := filepath.Join(b2dinst.ImgCachePath, defaultISOFilename)
 	if isoURL == "" {
 		log.Infof("Copying %s to %s...", defaultISO, machineIsoPath)
-		return copyFile(defaultISO, machineIsoPath)
+		_, err := copyFile(defaultISO, machineIsoPath)
+		return err
 	}
 
 	// if ISO is specified, check if it matches a github releases url or fallback to a direct download
