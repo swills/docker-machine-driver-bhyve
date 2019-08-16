@@ -5,8 +5,6 @@
 package bhyve
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -15,7 +13,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/engine"
@@ -222,34 +219,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 	}
 }
 
-func (d *Driver) getIPfromDHCPLease() (string, error) {
-	dhcpdir := d.StorePath
-	dhcpleasefile := filepath.Join(dhcpdir, "bhyve.leases")
-
-	file, err := os.Open(dhcpleasefile)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, d.MACAddress) {
-			log.Debugf("Found our MAC")
-			words := strings.Fields(line)
-			log.Debugf("IP is: " + words[2])
-			d.IPAddress = words[2]
-			return d.IPAddress, nil
-		}
-	}
-
-	return "", errors.New("IP Not Found")
-}
-
 func (d *Driver) GetIP() (string, error) {
 	s, err := d.GetState()
 	if err != nil {
@@ -267,7 +236,12 @@ func (d *Driver) GetIP() (string, error) {
 	}
 
 	log.Debugf("getting IP from DHCP lease")
-	return d.getIPfromDHCPLease()
+	ip, err := getIPfromDHCPLease(filepath.Join(d.StorePath, "bhyve.leases"), d.MACAddress)
+	if err != nil {
+		return "", err
+	}
+	d.IPAddress = ip
+	return ip, nil
 }
 
 func (d *Driver) GetSSHHostname() (string, error) {

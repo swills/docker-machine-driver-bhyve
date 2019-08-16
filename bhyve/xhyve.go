@@ -188,11 +188,10 @@ func (d *Driver) generateRawDiskImage(diskPath string, size int64) error {
 
 func (d *Driver) waitForIP() error {
 	var ip string
-	var err error
 
 	log.Infof("Waiting for VM to come online...")
 	for i := 1; i <= 60; i++ {
-		ip, err = d.getIPfromDHCPLease()
+		ip, err := getIPfromDHCPLease(filepath.Join(d.StorePath, "bhyve.leases"), d.MACAddress)
 		if err != nil {
 			log.Debugf("Not there yet %d/%d, error: %s", i, 60, err)
 			time.Sleep(2 * time.Second)

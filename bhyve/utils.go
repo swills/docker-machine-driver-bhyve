@@ -5,6 +5,7 @@
 package bhyve
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -380,4 +381,29 @@ func findtapdev(bridge string) (string, error) {
 	}
 
 	return nexttapname, nil
+}
+
+func getIPfromDHCPLease(dhcpleasefile string, macaddress string) (string, error) {
+	file, err := os.Open(dhcpleasefile)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, macaddress) {
+			log.Debugf("Found our MAC")
+			words := strings.Fields(line)
+			ip := words[2]
+			log.Debugf("IP is: " + ip)
+			return ip, nil
+		}
+	}
+
+	return "", errors.New("IP Not Found")
 }
