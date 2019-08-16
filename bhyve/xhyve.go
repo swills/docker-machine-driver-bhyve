@@ -68,7 +68,7 @@ func (d *Driver) copyIsoToMachineDir(isoURL, machineName string) error {
 	b2dinst := b2d.NewB2dUtils(d.StorePath)
 	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
 
-	if err := d.updateISOCache(d.StorePath, isoURL); err != nil {
+	if err := updateISOCache(d.StorePath, isoURL); err != nil {
 		return err
 	}
 
