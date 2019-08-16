@@ -198,39 +198,8 @@ func (d *Driver) getBhyveVMName() (string, error) {
 	return "docker-machine-" + username.Username + "-" + d.MachineName, nil
 }
 
-func (d *Driver) writeDeviceMap() error {
-	devmap := d.ResolveStorePath("/device.map")
-	cdpath := d.ResolveStorePath(isoFilename)
-
-	f, err := os.Create(devmap)
-	if err != nil {
-		return err
-	}
-
-	_, err = f.WriteString("(hd0) " + d.ResolveStorePath(diskname) + "\n")
-	if err != nil {
-		return err
-	}
-	_, err = f.WriteString("(cd0) " + cdpath + "\n")
-	if err != nil {
-		return err
-	}
-
-	err = f.Sync()
-	if err != nil {
-		return err
-	}
-	err = f.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-
-}
-
 func (d *Driver) runGrub() error {
-	err := d.writeDeviceMap()
+	err := writeDeviceMap(d.ResolveStorePath("/device.map"), d.ResolveStorePath(isoFilename), d.ResolveStorePath(diskname))
 	if err != nil {
 		return err
 	}

@@ -218,3 +218,30 @@ func killConsoleLogger(pidfile string) error {
 
 	return nil
 }
+
+func writeDeviceMap(devmap string, cdpath string, diskname string) error {
+	f, err := os.Create(devmap)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString("(hd0) " + diskname + "\n")
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString("(cd0) " + cdpath + "\n")
+	if err != nil {
+		return err
+	}
+
+	err = f.Sync()
+	if err != nil {
+		return err
+	}
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
