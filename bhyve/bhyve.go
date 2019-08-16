@@ -422,7 +422,7 @@ func (d *Driver) GetURL() (string, error) {
 	return fmt.Sprintf("tcp://%s:2376", ip), nil
 }
 
-func (d *Driver) Kill() error {
+func (d *Driver) destroyVM() error {
 	vmname, err := d.getBhyveVMName()
 	if err != nil {
 		return err
@@ -443,12 +443,14 @@ func (d *Driver) Kill() error {
 		return fmt.Errorf("failed to kill %s", d.MachineName)
 	}
 
-	err = easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	d.IPAddress = ""
+func (d *Driver) destroyTap() error {
+	return easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
+}
+
+func (d *Driver) killConsoleLogger() error {
 	nmdmpid, err := ioutil.ReadFile(d.ResolveStorePath("nmdm.pid"))
 	if err == nil {
 		err = easyCmd("kill", string(nmdmpid))
@@ -456,6 +458,28 @@ func (d *Driver) Kill() error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (d *Driver) Kill() error {
+	err := d.destroyVM()
+	if err != nil {
+		return err
+	}
+
+	err = d.destroyTap()
+	if err != nil {
+		return err
+	}
+
+	err = d.killConsoleLogger()
+	if err != nil {
+		return err
+	}
+
+	d.IPAddress = ""
+
 	return nil
 }
 
