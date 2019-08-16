@@ -31,7 +31,7 @@ echo 'jsmith ALL=(ALL) NOPASSWD: ALL' >> /usr/local/etc/sudoers
 pw groupmod wheel -m jsmith
 ```
 
-* Add these lines to /etc/devfs.rules:
+* Add these lines to `/etc/devfs.rules`:
 
 ```
 [system=10]
