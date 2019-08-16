@@ -1,3 +1,7 @@
+// Copyright 2019 Steve Wills. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package bhyve
 
 import (
@@ -8,11 +12,12 @@ import (
 	"fmt"
 	"github.com/docker/machine/libmachine/log"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -22,15 +27,6 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-func getUsername() (string, error) {
-	username, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-
-	return username.Username, nil
 }
 
 func generateMACAddress() string {
@@ -150,4 +146,75 @@ func copyFile(src, dst string) (int64, error) {
 	}
 
 	return nBytes, nil
+}
+
+func ensureIPForwardingEnabled() error {
+	log.Debugf("Checking IP forwarding")
+	cmd := exec.Command("sysctl", "-n", "net.inet.ip.forwarding")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	isenabled, err := strconv.Atoi(strings.Trim(stdout.String(), "\n"))
+	if err != nil {
+		return err
+	}
+
+	if isenabled == 0 {
+		log.Debugf("IP forwarding not enabled, enabling")
+		err = easyCmd("sudo", "sysctl", "net.inet.ip.forwarding=1")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func destroyTap(netdev string) error {
+	return easyCmd("sudo", "ifconfig", netdev, "destroy")
+}
+
+func destroyVM(vmname string) error {
+	tries := 0
+	for ; tries < retrycount; tries++ {
+		if fileExists("/dev/vmm/" + vmname) {
+			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
+			if err != nil {
+			}
+			time.Sleep(sleeptime * time.Millisecond)
+		}
+	}
+
+	if tries > retrycount {
+		return fmt.Errorf("failed to kill %s", vmname)
+	}
+
+	return nil
+}
+
+func killConsoleLogger(pidfile string) error {
+	nmdmpid, err := ioutil.ReadFile(pidfile)
+	if err != nil {
+		log.Debugf("Could not get pid file for console logger")
+	}
+
+	pid, err := strconv.Atoi(string(nmdmpid))
+	if err != nil {
+		log.Debugf("Failed to parse console logger pid")
+		return err
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		log.Debugf("Couldn't find console logger process %s", nmdmpid)
+		return err
+	}
+
+	if err := process.Signal(syscall.SIGKILL); err != nil {
+		return err
+	}
+
+	return nil
 }

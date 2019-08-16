@@ -6,7 +6,6 @@ package bhyve
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -189,12 +189,13 @@ func (d *Driver) findtapdev() (string, error) {
 }
 
 func (d *Driver) getBhyveVMName() (string, error) {
-	username, err := getUsername()
+
+	username, err := user.Current()
 	if err != nil {
 		return "", err
 	}
 
-	return "docker-machine-" + username + "-" + d.MachineName, nil
+	return "docker-machine-" + username.Username + "-" + d.MachineName, nil
 }
 
 func (d *Driver) writeDeviceMap() error {
@@ -422,59 +423,21 @@ func (d *Driver) GetURL() (string, error) {
 	return fmt.Sprintf("tcp://%s:2376", ip), nil
 }
 
-func (d *Driver) destroyVM() error {
+func (d *Driver) Kill() error {
 	vmname, err := d.getBhyveVMName()
 	if err != nil {
 		return err
 	}
 
-	tries := 0
-	for ; tries < retrycount; tries++ {
-		if fileExists("/dev/vmm/" + vmname) {
-			log.Debugf("Removing VM %s, try %d", d.MachineName, tries)
-			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
-			if err != nil {
-			}
-			time.Sleep(sleeptime * time.Millisecond)
-		}
-	}
-
-	if tries > retrycount {
-		return fmt.Errorf("failed to kill %s", d.MachineName)
-	}
-
-	return nil
-}
-
-func (d *Driver) destroyTap() error {
-	return easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
-}
-
-func (d *Driver) killConsoleLogger() error {
-	nmdmpid, err := ioutil.ReadFile(d.ResolveStorePath("nmdm.pid"))
-	if err == nil {
-		err = easyCmd("kill", string(nmdmpid))
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (d *Driver) Kill() error {
-	err := d.destroyVM()
-	if err != nil {
+	if err := destroyVM(vmname); err != nil {
 		return err
 	}
 
-	err = d.destroyTap()
-	if err != nil {
+	if err := destroyTap(d.NetDev); err != nil {
 		return err
 	}
 
-	err = d.killConsoleLogger()
-	if err != nil {
+	if err := killConsoleLogger(d.ResolveStorePath("nmdm.pid")); err != nil {
 		return err
 	}
 
@@ -533,34 +496,9 @@ func (d *Driver) startDHCPServer() error {
 	return nil
 }
 
-func (d *Driver) ensureIPForwardingEnabled() error {
-	log.Debugf("Checking IP forwarding")
-	cmd := exec.Command("sysctl", "-n", "net.inet.ip.forwarding")
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-
-	isenabled, err := strconv.Atoi(strings.Trim(stdout.String(), "\n"))
-	if err != nil {
-		return err
-	}
-
-	if isenabled == 0 {
-		log.Debugf("IP forwarding not enabled, enabling")
-		err = easyCmd("sudo", "sysctl", "net.inet.ip.forwarding=1")
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (d *Driver) PreCreateCheck() error {
 
-	err := d.ensureIPForwardingEnabled()
+	err := ensureIPForwardingEnabled()
 	if err != nil {
 		return err
 	}
@@ -578,7 +516,12 @@ func (d *Driver) PreCreateCheck() error {
 }
 
 func (d *Driver) Remove() error {
-	err := os.RemoveAll(d.ResolveStorePath(diskname))
+	err := d.Kill()
+	if err != nil {
+		return err
+	}
+
+	err = os.RemoveAll(d.ResolveStorePath(diskname))
 	if err != nil {
 		return err
 	}
