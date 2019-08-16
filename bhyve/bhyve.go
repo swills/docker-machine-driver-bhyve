@@ -662,39 +662,11 @@ func (d *Driver) Start() error {
 }
 
 func (d *Driver) Stop() error {
-	vmname, err := d.getBhyveVMName()
+	err := d.Kill()
 	if err != nil {
 		return err
 	}
 
-	tries := 0
-	for ; tries < retrycount; tries++ {
-		if fileExists("/dev/vmm/" + vmname) {
-			log.Debugf("Removing VM %s, try %d", d.MachineName, tries)
-			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
-			if err != nil {
-			}
-			time.Sleep(sleeptime * time.Millisecond)
-		}
-	}
-
-	if tries > retrycount {
-		return fmt.Errorf("failed to kill %s", d.MachineName)
-	}
-
-	err = easyCmd("sudo", "ifconfig", d.NetDev, "destroy")
-	if err != nil {
-		return err
-	}
-
-	d.IPAddress = ""
-	nmdmpid, err := ioutil.ReadFile(d.ResolveStorePath("nmdm.pid"))
-	if err == nil {
-		err = easyCmd("kill", string(nmdmpid))
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
