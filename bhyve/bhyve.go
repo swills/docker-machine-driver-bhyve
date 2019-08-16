@@ -518,7 +518,7 @@ func (d *Driver) PreCreateCheck() error {
 func (d *Driver) Remove() error {
 	err := d.Kill()
 	if err != nil {
-		return err
+		log.Debugf("Failed to kill %s, perhaps already dead?", d.MachineName)
 	}
 
 	err = os.RemoveAll(d.ResolveStorePath("."))
