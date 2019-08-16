@@ -152,8 +152,6 @@ func (d *Driver) generateKeyBundle() (*bytes.Buffer, error) {
 }
 
 func (d *Driver) generateRawDiskImage(diskPath string, size int64) error {
-	log.Debugf("generateRawDiskImage called")
-
 	f, err := os.OpenFile(diskPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		if os.IsExist(err) {
