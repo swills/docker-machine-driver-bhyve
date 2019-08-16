@@ -64,11 +64,11 @@ func updateISOCache(storepath string, isoURL string) error {
 	return nil
 }
 
-func (d *Driver) copyIsoToMachineDir(isoURL, machineName string) error {
-	b2dinst := b2d.NewB2dUtils(d.StorePath)
-	mcnutilsinstance := mcnutils.NewB2dUtils(d.StorePath)
+func copyIsoToMachineDir(storepath string, isoURL, machineName string) error {
+	b2dinst := b2d.NewB2dUtils(storepath)
+	mcnutilsinstance := mcnutils.NewB2dUtils(storepath)
 
-	if err := updateISOCache(d.StorePath, isoURL); err != nil {
+	if err := updateISOCache(storepath, isoURL); err != nil {
 		return err
 	}
 
@@ -83,7 +83,7 @@ func (d *Driver) copyIsoToMachineDir(isoURL, machineName string) error {
 		}
 	}
 
-	machineDir := filepath.Join(d.StorePath, "machines", machineName)
+	machineDir := filepath.Join(storepath, "machines", machineName)
 	machineIsoPath := filepath.Join(machineDir, isoFilename)
 
 	// By default just copy the existing "cached" iso to the machine's directory...

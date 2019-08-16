@@ -65,7 +65,7 @@ func (d *Driver) publicSSHKeyPath() string {
 }
 
 func (d *Driver) Create() error {
-	if err := d.copyIsoToMachineDir(d.Boot2DockerURL, d.MachineName); err != nil {
+	if err := copyIsoToMachineDir(d.StorePath, d.Boot2DockerURL, d.MachineName); err != nil {
 		return err
 	}
 
