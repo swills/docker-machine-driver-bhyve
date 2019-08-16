@@ -6,6 +6,10 @@ heavily inspired by the [xhyve driver](https://github.com/machine-drivers/docker
 [VirtualBox](https://github.com/docker/machine/tree/master/drivers/virtualbox) driver.
 See also [this issue](https://github.com/machine-drivers/docker-machine-driver-xhyve/issues/200).
 
+# Requirements
+
+You must be running a version of [FreeBSD](https://www.FreeBSD.org/) which includes [this](https://svnweb.freebsd.org/base?view=revision&revision=342168) [commit](https://github.com/freebsd/freebsd/commit/53dba18a1b398c13a795558d636b8dce20ef376f). As of now (2019/08/16), this is only in FreeBSD-CURRENT.
+
 # How To Use It
 
 ## One time setup
