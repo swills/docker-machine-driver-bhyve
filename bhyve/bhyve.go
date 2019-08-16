@@ -271,7 +271,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 }
 
 func (d *Driver) Start() error {
-	// TODO Need to fix this to log bhyve output to this file
+	// TODO log bhyve output to this file
 	bhyvelogpath := d.ResolveStorePath("bhyve.log")
 	log.Debugf("bhyvelogpath: %s", bhyvelogpath)
 
@@ -295,13 +295,16 @@ func (d *Driver) Start() error {
 		return err
 	}
 	d.NMDMDev = nmdmdev
-	macaddr := d.MACAddress
+
 	tapdev, err := findtapdev(d.Bridge)
+	if err != nil {
+		return err
+	}
 	d.NetDev = tapdev
+
 	cdpath := d.ResolveStorePath(isoFilename)
 	cpucount := strconv.Itoa(int(d.CPUcount))
 	ram := strconv.Itoa(int(d.MemSize))
-	log.Debugf("RAM size: " + ram)
 
 	err = startConsoleLogger(d.ResolveStorePath(""), nmdmdev)
 	if err != nil {
@@ -309,7 +312,7 @@ func (d *Driver) Start() error {
 	}
 
 	cmd := exec.Command("/usr/sbin/daemon", "-t", "XXXXX", "-f", "sudo", "bhyve", "-A", "-H", "-P", "-s",
-		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+macaddr, "-s", "3:0,virtio-blk,"+
+		"0:0,hostbridge", "-s", "1:0,lpc", "-s", "2:0,virtio-net,"+tapdev+",mac="+d.MACAddress, "-s", "3:0,virtio-blk,"+
 			d.ResolveStorePath(diskname), "-s", "4:0,virtio-rnd,/dev/random", "-s", "5:0,ahci-cd,"+cdpath, "-l", "com1,"+nmdmdev+"A", "-c", cpucount, "-m", ram+"M",
 		vmname)
 	stderr, err := cmd.StderrPipe()
