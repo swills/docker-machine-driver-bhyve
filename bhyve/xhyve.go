@@ -104,11 +104,11 @@ func copyIsoToMachineDir(storepath string, isoURL, machineName string) error {
 }
 
 // Make a boot2docker userdata.tar key bundle
-func (d *Driver) generateKeyBundle() (*bytes.Buffer, error) {
+func generateKeyBundle(keypath string) (*bytes.Buffer, error) {
 	magicString := "boot2docker, please format-me"
 
 	log.Infof("Creating SSH key...")
-	if err := ssh.GenerateSSHKey(d.GetSSHKeyPath()); err != nil {
+	if err := ssh.GenerateSSHKey(keypath); err != nil {
 		return nil, err
 	}
 
@@ -128,7 +128,7 @@ func (d *Driver) generateKeyBundle() (*bytes.Buffer, error) {
 	if err := tw.WriteHeader(file); err != nil {
 		return nil, err
 	}
-	pubKey, err := ioutil.ReadFile(d.publicSSHKeyPath())
+	pubKey, err := ioutil.ReadFile(keypath + ".pub")
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (d *Driver) generateKeyBundle() (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-func (d *Driver) generateRawDiskImage(diskPath string, size int64) error {
+func generateRawDiskImage(sshkeypath string, diskPath string, size int64) error {
 	f, err := os.OpenFile(diskPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		if os.IsExist(err) {
@@ -162,11 +162,11 @@ func (d *Driver) generateRawDiskImage(diskPath string, size int64) error {
 	}
 	f.Close()
 
-	if err := os.Truncate(diskPath, d.DiskSize); err != nil {
+	if err := os.Truncate(diskPath, size); err != nil {
 		return err
 	}
 
-	tarBuf, err := d.generateKeyBundle()
+	tarBuf, err := generateKeyBundle(sshkeypath)
 	if err != nil {
 		return err
 	}

@@ -60,16 +60,12 @@ func (d *Driver) getBhyveVMName() (string, error) {
 	return "docker-machine-" + username.Username + "-" + d.MachineName, nil
 }
 
-func (d *Driver) publicSSHKeyPath() string {
-	return d.GetSSHKeyPath() + ".pub"
-}
-
 func (d *Driver) Create() error {
 	if err := copyIsoToMachineDir(d.StorePath, d.Boot2DockerURL, d.MachineName); err != nil {
 		return err
 	}
 
-	if err := d.generateRawDiskImage(d.ResolveStorePath(diskname), d.DiskSize); err != nil {
+	if err := generateRawDiskImage(d.GetSSHKeyPath(), d.ResolveStorePath(diskname), d.DiskSize); err != nil {
 		return err
 	}
 
