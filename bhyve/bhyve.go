@@ -521,7 +521,7 @@ func (d *Driver) Remove() error {
 		log.Debugf("Failed to kill %s, perhaps already dead?", d.MachineName)
 	}
 
-	err = os.RemoveAll(d.ResolveStorePath("."))
+	err = os.RemoveAll(d.ResolveStorePath(diskname))
 	if err != nil {
 		return err
 	}
