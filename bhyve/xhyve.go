@@ -8,7 +8,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"fmt"
-	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/ssh"
@@ -186,13 +185,13 @@ func generateRawDiskImage(sshkeypath string, diskPath string, size int64) error 
 	return nil
 }
 
-func (d *Driver) waitForIP() error {
+func waitForIP(storepath string, macaddress string) (string, error) {
 	var ip string
 	var err error
 
 	log.Infof("Waiting for VM to come online...")
 	for i := 1; i <= 60; i++ {
-		ip, err = getIPfromDHCPLease(filepath.Join(d.StorePath, "bhyve.leases"), d.MACAddress)
+		ip, err = getIPfromDHCPLease(filepath.Join(storepath, "bhyve.leases"), macaddress)
 		if err != nil {
 			log.Debugf("Not there yet %d/%d, error: %s", i, 60, err)
 			time.Sleep(2 * time.Second)
@@ -201,20 +200,14 @@ func (d *Driver) waitForIP() error {
 
 		if ip != "" {
 			log.Debugf("Got an ip: %s", ip)
-			d.IPAddress = ip
 
 			break
 		}
 	}
 
 	if ip == "" {
-		return fmt.Errorf("machine didn't return an IP after 120 seconds, aborting")
+		return "", fmt.Errorf("machine didn't return an IP after 120 seconds, aborting")
 	}
 
-	// Wait for SSH over NAT to be available before returning to user
-	if err := drivers.WaitForSSH(d); err != nil {
-		return err
-	}
-
-	return nil
+	return ip, nil
 }

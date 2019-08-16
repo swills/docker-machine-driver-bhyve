@@ -324,7 +324,14 @@ func (d *Driver) Start() error {
 	}
 	log.Debugf("bhyve: " + stripCtlAndExtFromBytes(string(slurp)))
 
-	if err := d.waitForIP(); err != nil {
+	ip, err := waitForIP(d.StorePath, d.MACAddress)
+	if err != nil {
+		return err
+	}
+	d.IPAddress = ip
+
+	// Wait for SSH over NAT to be available before returning to user
+	if err := drivers.WaitForSSH(d); err != nil {
 		return err
 	}
 
