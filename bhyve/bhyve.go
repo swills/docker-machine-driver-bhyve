@@ -303,7 +303,7 @@ func (d *Driver) Start() error {
 	ram := strconv.Itoa(int(d.MemSize))
 	log.Debugf("RAM size: " + ram)
 
-	err = startConsoleLogger(d.StorePath, nmdmdev)
+	err = startConsoleLogger(d.ResolveStorePath(""), nmdmdev)
 	if err != nil {
 		return err
 	}
