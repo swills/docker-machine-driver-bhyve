@@ -244,11 +244,7 @@ func (d *Driver) Restart() error {
 		}
 	}
 
-	if err := d.Start(); err != nil {
-		return err
-	}
-
-	return d.waitForIP()
+	return d.Start()
 }
 
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
