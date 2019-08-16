@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/docker/machine/libmachine/log"
 	"io"
 	"os"
@@ -109,33 +110,44 @@ func findNMDMDev() (string, error) {
 	}
 }
 
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+func copyFile(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
 	}
 
-	defer out.Close()
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
 
-	if _, err = io.Copy(out, in); err != nil {
-		return err
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+
+	defer destination.Close()
+
+	nBytes, err := io.Copy(destination, source)
+
+	if err != nil {
+		return nBytes, err
 	}
 
 	fi, err := os.Stat(src)
 	if err != nil {
-		return err
+		return nBytes, err
 	}
 
 	if err := os.Chmod(dst, fi.Mode()); err != nil {
-		return err
+		return nBytes, err
 	}
 
-	return nil
+	return nBytes, nil
 }
