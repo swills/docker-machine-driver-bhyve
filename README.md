@@ -15,9 +15,17 @@ See also [this issue](https://github.com/machine-drivers/docker-machine-driver-x
   * `grub2-bhyve`
   * `dnsmasq`
 
-* User running docker-machine must have password-less `sudo` access.
+* User running docker-machine must have password-less `sudo` access:
+ 
+```
+echo 'jsmith ALL=(ALL) NOPASSWD: ALL' >> /usr/local/etc/sudoers
+```
 
-* Add user to wheel group
+* Add user to wheel group:
+
+```
+pw groupmod wheel -m jsmith
+```
 
 * Add these lines to /etc/devfs.rules:
 
