@@ -183,7 +183,25 @@ func (d *Driver) Kill() error {
 }
 
 func (d *Driver) PreCreateCheck() error {
+	err := checkRequiredCommands()
+	if err != nil {
+		return err
+	}
 
+	err = kmodLoaded("vmm")
+	if err != nil {
+		return err
+	}
+
+	err = kmodLoaded("nmdm")
+	if err != nil {
+		return err
+	}
+
+	err = kmodLoaded("ng_ether")
+	if err != nil {
+		return err
+	}
 	username, err := user.Current()
 	if err != nil {
 		return err

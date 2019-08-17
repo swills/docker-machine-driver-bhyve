@@ -514,3 +514,35 @@ func startConsoleLogger(storepath string, nmdmdev string) error {
 
 	return nil
 }
+
+func checkRequiredCommand(commandname string) error {
+	_, err := exec.LookPath(commandname)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func checkRequiredCommands() error {
+	if err := checkRequiredCommand("sudo"); err != nil {
+		return errors.New("sudo not installed")
+	}
+	if err := checkRequiredCommand("grub2-bhyve"); err != nil {
+		return errors.New("grub2-bhyve not installed")
+	}
+	if err := checkRequiredCommand("dnsmasq"); err != nil {
+		return errors.New("dnsmasq not installed")
+	}
+	return nil
+}
+
+func kmodLoaded(kmod string) error {
+	cmd := exec.Command("sudo", "kldstat")
+	out, err := cmd.CombinedOutput()
+	log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
+	if strings.Contains(string(out), kmod) {
+		log.Debugf("kmod %s is loaded", kmod)
+		return nil
+	}
+	return err
+}
