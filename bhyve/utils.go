@@ -540,10 +540,19 @@ func kmodLoaded(kmod string) error {
 	cmd := exec.Command("kldstat", "-m", kmod)
 	err := cmd.Start()
 	if err != nil {
-		log.Debugf("kmod %s is loaded", kmod)
-		return nil
-
+		return err
 	}
+	if err := cmd.Wait(); err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			if _, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				return errors.New("required kmod " + kmod + " not loaded")
+			}
+		} else {
+			return err
+		}
+	}
+	log.Debugf("kmod %s is loaded", kmod)
+
 	return err
 }
 
