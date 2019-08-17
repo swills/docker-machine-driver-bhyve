@@ -1,3 +1,5 @@
+[![Build Status](https://api.cirrus-ci.com/github/swills/docker-machine-driver-bhyve.svg)](https://cirrus-ci.com/github/swills/docker-machine-driver-bhyve/)
+
 # What is this
 
 This is a [Docker Machine](https://docs.docker.com/machine/overview/) Driver for [Bhyve](http://bhyve.org/). It is
