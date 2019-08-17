@@ -25,8 +25,8 @@ const (
 	defaultMemSize        = 1024  // Mb
 	defaultCPUCount       = 1
 	defaultBridge         = "bridge0"
-	defaultSubnet         = "192.168.8.1/24"
-	defaultDHCPRange      = "192.168.8.10,192.168.8.254"
+	defaultSubnet         = "192.168.99.1/24"
+	defaultHostOnlyCIDR   = "192.168.99.100,192.168.99.254"
 	defaultBoot2DockerURL = ""
 	defaultISOFilename    = "boot2docker.iso"
 	retrycount            = 16
@@ -109,7 +109,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "bhyve-dhcprange",
 			Usage:  "DHCP Range to use",
 			EnvVar: "BHYVE_DHCPRANGE",
-			Value:  defaultDHCPRange,
+			Value:  defaultHostOnlyCIDR,
 		},
 		mcnflag.StringFlag{
 			Name:   "bhyve-boot2docker-url",
@@ -344,7 +344,7 @@ func NewDriver(hostName, storePath string) *Driver {
 		CPUcount:       defaultCPUCount,
 		MACAddress:     "",
 		Bridge:         defaultBridge,
-		DHCPRange:      defaultDHCPRange,
+		DHCPRange:      defaultHostOnlyCIDR,
 		Boot2DockerURL: defaultBoot2DockerURL,
 		Subnet:         defaultSubnet,
 		BhyveVMName:    defaultBhyveVMName,
