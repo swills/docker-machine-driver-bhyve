@@ -537,12 +537,12 @@ func checkRequiredCommands() error {
 }
 
 func kmodLoaded(kmod string) error {
-	cmd := exec.Command("sudo", "kldstat")
-	out, err := cmd.CombinedOutput()
-	log.Debugf("grub-bhyve: " + stripCtlAndExtFromBytes(string(out)))
-	if strings.Contains(string(out), kmod) {
+	cmd := exec.Command("kldstat", "-m", kmod)
+	err := cmd.Start()
+	if err != nil {
 		log.Debugf("kmod %s is loaded", kmod)
 		return nil
+
 	}
 	return err
 }
