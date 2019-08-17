@@ -548,6 +548,7 @@ func kmodLoaded(kmod string) error {
 }
 
 func checkRequireKmods() error {
+	log.Debugf("Checking kmods")
 	err := kmodLoaded("vmm")
 	if err != nil {
 		return err
