@@ -546,3 +546,22 @@ func kmodLoaded(kmod string) error {
 	}
 	return err
 }
+
+func checkRequireKmods() error {
+	err := kmodLoaded("vmm")
+	if err != nil {
+		return err
+	}
+
+	err = kmodLoaded("nmdm")
+	if err != nil {
+		return err
+	}
+
+	err = kmodLoaded("ng_ether")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
