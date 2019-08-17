@@ -528,7 +528,7 @@ func checkRequiredCommands() error {
 		return errors.New("sudo not installed")
 	}
 	if err := checkRequiredCommand("grub2-bhyve"); err != nil {
-		return errors.New("grub2-bhyve not installed")
+		return errors.New("grub-bhyve not installed")
 	}
 	if err := checkRequiredCommand("dnsmasq"); err != nil {
 		return errors.New("dnsmasq not installed")
