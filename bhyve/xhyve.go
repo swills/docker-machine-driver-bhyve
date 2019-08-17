@@ -12,6 +12,7 @@ import (
 	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/ssh"
 	"gitlab.mouf.net/swills/docker-machine-driver-bhyve/b2d"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -175,7 +176,10 @@ func generateRawDiskImage(sshkeypath string, diskPath string, size int64) error 
 		return err
 	}
 	defer file.Close()
-	file.Seek(0, os.SEEK_SET)
+	_, err = file.Seek(0, io.SeekStart)
+	if err != nil {
+		return err
+	}
 	_, err = file.Write(tarBuf.Bytes())
 	if err != nil {
 		return err

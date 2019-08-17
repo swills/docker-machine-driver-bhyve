@@ -161,6 +161,9 @@ func ensureIPForwardingEnabled() error {
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
+	if err != nil {
+		return err
+	}
 
 	isenabled, err := strconv.Atoi(strings.Trim(stdout.String(), "\n"))
 	if err != nil {
@@ -185,9 +188,7 @@ func destroyVM(vmname string) error {
 	tries := 0
 	for ; tries < retrycount; tries++ {
 		if fileExists("/dev/vmm/" + vmname) {
-			err := easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
-			if err != nil {
-			}
+			_ = easyCmd("sudo", "bhyvectl", "--destroy", "--vm="+vmname)
 			time.Sleep(sleeptime * time.Millisecond)
 		}
 	}
@@ -344,14 +345,16 @@ func findtapdev(bridge string) (string, error) {
 	numtaps := 0
 	nexttap := 0
 	ifaces, _ := net.Interfaces()
+	r1 := regexp.MustCompile("^tap")
 	for _, iface := range ifaces {
 		log.Debugf("Checking interface %s", iface.Name)
-		match, _ := regexp.MatchString("^tap", iface.Name)
+		match := r1.MatchString(iface.Name)
 		if match {
-			r := regexp.MustCompile(`tap(?P<num>\d*)`)
-			res := r.FindAllStringSubmatch(iface.Name, -1)
+			r2 := regexp.MustCompile(`tap(?P<num>\d*)`)
+			res := r2.FindAllStringSubmatch(iface.Name, -1)
 			tapnum, err := strconv.Atoi(res[0][1])
 			if err != nil {
+				return "", err
 			}
 			if tapnum > lasttap {
 				lasttap = tapnum
