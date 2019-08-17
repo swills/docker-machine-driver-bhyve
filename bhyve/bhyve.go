@@ -183,7 +183,6 @@ func (d *Driver) Kill() error {
 }
 
 func (d *Driver) PreCreateCheck() error {
-	log.Debugf("PreCreateCheck called")
 	err := checkRequireKmods()
 	if err != nil {
 		return err
