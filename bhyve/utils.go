@@ -104,7 +104,7 @@ func findNMDMDev() (string, error) {
 			lastnmdm++
 		}
 		if lastnmdm > 100 {
-			return "tapdeverror", errors.New("could not find nmdm dev")
+			return "nmdmdeverror", errors.New("could not find nmdm dev")
 		}
 		time.Sleep(1 * time.Second)
 	}
