@@ -527,11 +527,11 @@ func checkRequiredCommands() error {
 	if err := checkRequiredCommand("sudo"); err != nil {
 		return errors.New("sudo not installed")
 	}
-	if err := checkRequiredCommand("grub-bhyve"); err != nil {
-		return errors.New("grub-bhyve not installed")
+	if err := checkRequiredCommand("/usr/local/sbin/grub-bhyve"); err != nil {
+		return errors.New("/usr/local/sbin/grub-bhyve not found")
 	}
-	if err := checkRequiredCommand("dnsmasq"); err != nil {
-		return errors.New("dnsmasq not installed")
+	if err := checkRequiredCommand("/usr/local/sbin/dnsmasq"); err != nil {
+		return errors.New("/usr/local/sbin/dnsmasq not found")
 	}
 	return nil
 }
