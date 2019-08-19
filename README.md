@@ -21,7 +21,17 @@ You must be running a version of [FreeBSD](https://www.FreeBSD.org/) which inclu
   * `grub2-bhyve`
   * `dnsmasq`
 
-* User running docker-machine must have password-less `sudo` access:
+* User running `docker-machine` must have password-less `sudo` access to the following commands:
+  * /sbin/ifconfig
+  * /sbin/sysctl
+  * /usr/bin/env
+  * /usr/bin/fuser
+  * /usr/local/sbin/dnsmasq
+  * /usr/local/sbin/grub-bhyve
+  * /usr/sbin/bhyve
+  * /usr/sbin/bhyvectl
+  * /usr/sbin/ngctl
+
  
 ```
 echo 'jsmith ALL=(ALL) NOPASSWD: ALL' >> /usr/local/etc/sudoers
