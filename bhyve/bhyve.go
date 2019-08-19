@@ -169,8 +169,10 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
-	if err := destroyTap(d.NetDev); err != nil {
-		return err
+	if d.NetDev != "" {
+		if err := destroyTap(d.NetDev); err != nil {
+			return err
+		}
 	}
 
 	if err := killConsoleLogger(d.ResolveStorePath("nmdm.pid")); err != nil {
