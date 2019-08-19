@@ -1,5 +1,5 @@
 docker-machine-driver-bhyve
-nmdm
+docker-machine-driver-bhyve-nmdm
 
 # Binaries for programs and plugins
 *.exe

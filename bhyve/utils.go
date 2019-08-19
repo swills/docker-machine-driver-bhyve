@@ -506,7 +506,7 @@ func startConsoleLogger(storepath string, nmdmdev string) error {
 	}
 
 	err = easyCmd("/usr/sbin/daemon", "-f", "-p",
-		filepath.Join(storepath, "nmdm.pid"), dir+"/nmdm", nmdmdev+"B",
+		filepath.Join(storepath, "nmdm.pid"), dir+"/docker-machine-driver-bhyve-nmdm", nmdmdev+"B",
 		filepath.Join(storepath, "console.log"))
 	if err != nil {
 		return err
