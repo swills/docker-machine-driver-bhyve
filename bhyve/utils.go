@@ -253,8 +253,8 @@ func writeDeviceMap(devmap string, cdpath string, diskname string) error {
 
 func runGrub(devmap string, memsize string, vmname string) error {
 	for maxtries := 0; maxtries < retrycount; maxtries++ {
-		cmd := exec.Command("sudo", "/usr/local/sbin/grub-bhyve", "-m", devmap, "-r", "cd0", "-M",
-			memsize+"M", vmname)
+		cmd := exec.Command("sudo", "env", "-i", "TERM=xterm", "/usr/local/sbin/grub-bhyve",
+			"-m", devmap, "-r", "cd0", "-M", memsize+"M", vmname)
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
 			return err
