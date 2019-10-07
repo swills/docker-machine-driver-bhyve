@@ -1,4 +1,5 @@
 [![Build Status](https://api.cirrus-ci.com/github/swills/docker-machine-driver-bhyve.svg)](https://cirrus-ci.com/github/swills/docker-machine-driver-bhyve/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/swills/docker-machine-driver-bhyve)](https://goreportcard.com/report/github.com/swills/docker-machine-driver-bhyve)
 
 # What is this
 
