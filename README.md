@@ -74,3 +74,11 @@ docker-machine create
 eval $(docker-machine env)
 docker run --rm hello-world
 ```
+
+## Note about bridges
+
+If the interface where the NAT IP is assigned is a member of another bridge, the NAT will fail
+
+## Note about nat
+
+Local IPv4 breaks because all inbound traffic is forwarded to the docker-machine VM
