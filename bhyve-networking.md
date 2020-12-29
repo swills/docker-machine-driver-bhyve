@@ -15,7 +15,8 @@ Starting with these pages:
 * [Open vSwtich](https://docs.openvswitch.org/en/latest/intro/install/general/)
 * [NIC Passthrough](https://wiki.freebsd.org/bhyve/pci_passthru)
 * [Netgraph](https://www.freebsd.org/cgi/man.cgi?netgraph(4)) based things
-  * More on Netgraph [here](https://people.freebsd.org/~julian/netgraph.html) and 
-[here](https://reviews.freebsd.org/D24620)
+  * More on Netgraph [here](https://people.freebsd.org/~julian/netgraph.html) and [here](https://reviews.freebsd.org/D24620)
+  * There's also [ng_bridge](https://www.freebsd.org/cgi/man.cgi?query=ng_bridge&sektion=4) which is not the same as if_bridge above
+  * [this script](https://github.com/freebsd/freebsd/blob/master/share/examples/netgraph/virtual.lan) might help?
 
 Compare and contrast with [VirtualBox Networking](https://www.virtualbox.org/manual/ch06.html)
