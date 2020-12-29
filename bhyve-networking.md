@@ -17,3 +17,5 @@ Starting with these pages:
 * [Netgraph](https://www.freebsd.org/cgi/man.cgi?netgraph(4)) based things
   * More on Netgraph [here](https://people.freebsd.org/~julian/netgraph.html) and 
 [here](https://reviews.freebsd.org/D24620)
+
+Compare and contrast with [VirtualBox Networking](https://www.virtualbox.org/manual/ch06.html)
